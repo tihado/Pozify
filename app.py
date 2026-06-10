@@ -12,8 +12,38 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from pozify.pipeline import run_pipeline
 
 
+QUALITY_GUIDANCE = {
+    "too_short": "Record at least 10 seconds so the set contains enough movement context.",
+    "too_long": "Keep the clip under 60 seconds for the MVP analyzer.",
+    "too_dark": "Use brighter, even lighting and keep the body visible against the background.",
+    "too_blurry": "Stabilize the camera and avoid fast panning or heavy motion blur.",
+    "fps_too_low": "Use a camera mode with at least 15 FPS.",
+    "resolution_too_low": "Record at 480x360 or higher so joint positions are readable.",
+    "video_decode_failed": "Upload a playable video file; the current file could not be decoded.",
+}
+
+
 def _pretty_json(value: dict[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2)
+
+
+def _quality_markdown(video_manifest: dict[str, Any]) -> str:
+    warnings = video_manifest["quality_warnings"]
+    if not warnings:
+        return "## Video Quality\n\nNo quality warnings detected."
+
+    warning_items = "\n".join(f"- `{warning}`: {QUALITY_GUIDANCE[warning]}" for warning in warnings)
+    status = (
+        "Analysis is blocked until the video can be decoded reliably."
+        if not video_manifest["analysis_allowed"]
+        else "Analysis completed, but capture quality may affect downstream feedback."
+    )
+    return f"""## Video Quality
+
+{status}
+
+{warning_items}
+"""
 
 
 def analyze_video(
@@ -38,7 +68,24 @@ def analyze_video(
     )
 
     report = result["final_report"]
+    video_quality = _quality_markdown(report["video_manifest"])
     summary = report["coach_summary"]
+    if not report["video_manifest"]["analysis_allowed"]:
+        markdown = f"""{video_quality}
+
+## Run
+
+- **Run ID:** `{report["run_id"]}`
+- **Saved report:** `{Path(result["run_dir"]) / "final_report.json"}`
+"""
+        artifact_path = Path(result["run_dir"]) / "final_report.json"
+        return (
+            result["annotated_video_path"],
+            markdown,
+            _pretty_json(report),
+            str(artifact_path),
+        )
+
     markdown = f"""## Scan Summary
 
 - **Exercise:** {report["exercise"]["exercise"]} ({report["exercise"]["confidence"]:.0%} confidence)
@@ -59,6 +106,8 @@ def analyze_video(
 
 ### Next Session Plan
 {chr(10).join(f"- {item}" for item in summary["next_session_plan"])}
+
+{video_quality}
 """
 
     artifact_path = Path(result["run_dir"]) / "final_report.json"
