@@ -25,8 +25,25 @@ The pipeline runs in mock mode by default. To be explicit in scripts, call
 POZIFY_MOCK_MODE=1 uv run python app.py
 ```
 
-Setting `POZIFY_MOCK_MODE=0` currently raises `NotImplementedError` until real model-backed
-steps are added.
+Setting `POZIFY_MOCK_MODE=0` enables real video QC and MediaPipe-backed pose extraction while later
+analysis steps remain mocked. On current Python versions the pose step uses MediaPipe Tasks and
+downloads `pose_landmarker_lite.task` into `/tmp/pozify-models` on first use. To use a pre-downloaded
+model, set:
+
+```bash
+POZIFY_MEDIAPIPE_POSE_MODEL=/path/to/pose_landmarker_lite.task POZIFY_MOCK_MODE=0 uv run python app.py
+```
+
+The pose extractor is selected through a backend interface. MediaPipe is the default real backend:
+
+```bash
+POZIFY_POSE_BACKEND=mediapipe POZIFY_MOCK_MODE=0 uv run python app.py
+```
+
+Backend implementations live in `src/pozify/steps/pose_backends/` and return the same
+`PoseDetection` shape, so downstream steps do not depend on a specific model library. A reserved
+`mmpose` backend class is included as the integration point for OpenMMLab MMPose; implementing it
+requires installing MMPose/MMCV and mapping model keypoints into the shared landmark dictionary.
 
 ## Pipeline
 
@@ -117,7 +134,7 @@ Each step lives in `src/pozify/steps/` and exposes a `run(...)` function.
 Recommended replacement order:
 
 1. `video_qc.py`: read real video metadata with OpenCV.
-2. `pose_landmarker.py`: integrate MediaPipe Pose Landmarker.
+2. `pose_backends/`: add or refine pose model adapters such as MediaPipe or MMPose.
 3. `exercise_classifier.py`: load the exercise router model.
 4. `rep_counter.py`: implement exercise-specific state machines.
 5. `rep_analysis.py` and `issue_marker.py`: compute real metrics and issue scores.
@@ -134,3 +151,9 @@ uv run python -c "import app; from pozify.pipeline import run_pipeline; print('o
 
 The unit tests run the full mocked pipeline with no video input and with a small fixture path, then
 assert deterministic top-level keys for each JSON artifact.
+
+To run the real MediaPipe smoke test against `tests/fixtures/sample.MOV`, opt in explicitly:
+
+```bash
+POZIFY_RUN_REAL_POSE_TESTS=1 uv run python -m unittest tests.test_pose_steps.PoseStepTests.test_real_sample_mov_extracts_pose_landmarks
+```
