@@ -22,14 +22,25 @@ jobs:
         uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
+      - name: Restore virtual environment
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.13-${{ hashFiles('uv.lock') }}
+
       - name: Install dependencies
-        run: uv sync --extra dev
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: uv sync --locked --extra dev
 
       - name: Run unit tests
         run: uv run python -m unittest discover -s tests

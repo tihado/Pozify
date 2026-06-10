@@ -5,7 +5,7 @@ colorFrom: green
 colorTo: blue
 sdk: gradio
 sdk_version: "6.17.3"
-python_version: "3.14.4"
+python_version: "3.13"
 app_file: app.py
 fullWidth: true
 short_description: Video-based workout form review app.
