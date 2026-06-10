@@ -25,10 +25,15 @@ The pipeline runs in mock mode by default. To be explicit in scripts, call
 POZIFY_MOCK_MODE=1 uv run python app.py
 ```
 
-Setting `POZIFY_MOCK_MODE=0` enables real video QC and MediaPipe-backed pose extraction while later
-analysis steps remain mocked. On current Python versions the pose step uses MediaPipe Tasks and
-downloads `pose_landmarker_lite.task` into `/tmp/pozify-models` on first use. To use a pre-downloaded
-model, set:
+To run the end-to-end app with real video QC, MediaPipe pose extraction, real rep segmentation, and
+annotated video rendering, set:
+
+```bash
+POZIFY_MOCK_MODE=0 uv run python app.py
+```
+
+On current Python versions the pose step uses MediaPipe Tasks and downloads
+`pose_landmarker_lite.task` into `/tmp/pozify-models` on first use. To use a pre-downloaded model, set:
 
 ```bash
 POZIFY_MEDIAPIPE_POSE_MODEL=/path/to/pose_landmarker_lite.task POZIFY_MOCK_MODE=0 uv run python app.py
@@ -44,6 +49,11 @@ Backend implementations live in `src/pozify/steps/pose_backends/` and return the
 `PoseDetection` shape, so downstream steps do not depend on a specific model library. A reserved
 `mmpose` backend class is included as the integration point for OpenMMLab MMPose; implementing it
 requires installing MMPose/MMCV and mapping model keypoints into the shared landmark dictionary.
+
+When running in real mode, the UI summary now shows:
+
+- `Analysis mode`: `mock` or `real`
+- `Pose source`: for example `mock_pose` or `mediapipe_pose`
 
 ## Pipeline
 
@@ -97,9 +107,11 @@ Each analysis run creates a folder under `runs/<run_id>/`:
 - `pose_sequence.json`
 - `exercise_classification.json`
 - `reps.json`
+- `rep_debug.json`
 - `rep_analysis.json`
 - `variation.json`
 - `issue_markers.json`
+- `annotated_video.mp4`
 - `coach_summary.json`
 - `verification.json`
 - `final_report.json`
@@ -125,7 +137,11 @@ Video quality warning labels:
 Decode failures set `analysis_allowed=false`; the Gradio UI surfaces capture guidance instead of
 coach-style feedback when analysis is blocked.
 
-`annotated_video.mp4` is not implemented yet. The mocked renderer currently returns the original input video path and writes `annotated_video_placeholder.json`.
+`rep_debug.json` stores the selected segmentation signal, thresholds, detected extrema, and accepted
+rep segments for debugging rep counting.
+
+`annotated_video.mp4` is produced when the renderer can decode the input video. It overlays pose
+landmarks, skeleton connections, rep count, and rep boundary labels on top of the source video.
 
 ## Replacing Mock Steps
 
