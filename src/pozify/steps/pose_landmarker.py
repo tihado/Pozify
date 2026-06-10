@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pozify.contracts import PoseFrame, PoseSequence, VideoManifest
+from pozify.steps.video_qc import sample_frame_indices
 
 
 LANDMARK_NAMES = [
@@ -38,8 +39,7 @@ def _mock_landmarks(frame_index: int) -> dict[str, dict[str, float]]:
 
 def run(manifest: VideoManifest) -> PoseSequence:
     frames: list[PoseFrame] = []
-    step = max(1, int(manifest.total_frames / 12))
-    for frame_index in range(0, manifest.total_frames, step):
+    for frame_index in sample_frame_indices(manifest.total_frames):
         frames.append(
             PoseFrame(
                 frame_index=frame_index,
@@ -60,4 +60,3 @@ def run(manifest: VideoManifest) -> PoseSequence:
         smoothing_method="none",
         pose_valid_ratio=1.0,
     )
-

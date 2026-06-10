@@ -6,6 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify import pipeline
@@ -32,12 +35,18 @@ EXPECTED_ARTIFACT_KEYS = {
     ],
     "video_manifest.json": [
         "analysis_allowed",
+        "blur_laplacian_var",
+        "brightness_mean",
+        "codec",
+        "container",
         "duration_sec",
         "fps",
+        "height",
         "quality_warnings",
         "sampled_frames",
         "total_frames",
         "video_path",
+        "width",
     ],
     "pose_sequence.json": ["frames", "normalized", "pose_valid_ratio", "smoothing_method"],
     "exercise_classification.json": [
@@ -87,6 +96,32 @@ class PipelineContractTests(unittest.TestCase):
         pipeline.RUNS_DIR = self.original_runs_dir
         self.temp_dir.cleanup()
 
+    def _write_video(
+        self,
+        filename: str,
+        *,
+        fps: float = 30.0,
+        duration_sec: float = 10.0,
+        size: tuple[int, int] = (640, 480),
+    ) -> Path:
+        path = Path(self.temp_dir.name) / filename
+        writer = cv2.VideoWriter(
+            str(path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps,
+            size,
+        )
+        self.assertTrue(writer.isOpened())
+        width, height = size
+        for frame_index in range(int(fps * duration_sec)):
+            frame = np.full((height, width, 3), 130, dtype=np.uint8)
+            offset = frame_index % 120
+            cv2.rectangle(frame, (40 + offset, 80), (260 + offset, 300), (245, 245, 245), -1)
+            cv2.line(frame, (0, frame_index % height), (width - 1, height - 1), (20, 20, 20), 3)
+            writer.write(frame)
+        writer.release()
+        return path
+
     def _assert_pipeline_artifacts(self, result: dict[str, object]) -> None:
         run_dir = Path(str(result["run_dir"]))
         manifest_path = run_dir / "manifest.json"
@@ -124,16 +159,20 @@ class PipelineContractTests(unittest.TestCase):
         self._assert_pipeline_artifacts(result)
         report = result["final_report"]
         self.assertEqual(report["exercise"]["exercise"], "push_up")
-        self.assertEqual(report["video_manifest"]["quality_warnings"], ["no_video_uploaded_mock_mode"])
+        self.assertEqual(report["video_manifest"]["quality_warnings"], ["video_decode_failed"])
+        self.assertFalse(report["video_manifest"]["analysis_allowed"])
 
     def test_pipeline_runs_end_to_end_with_fixture_video_path(self) -> None:
-        fixture = Path(__file__).parent / "fixtures" / "sample.mp4"
+        fixture = self._write_video("sample.mp4")
         result = pipeline.run_pipeline(video_path=str(fixture), profile_input=PROFILE_INPUT, mock=True)
 
         self._assert_pipeline_artifacts(result)
         report = result["final_report"]
         self.assertEqual(report["video_manifest"]["video_path"], str(fixture))
         self.assertEqual(report["video_manifest"]["quality_warnings"], [])
+        self.assertTrue(report["video_manifest"]["analysis_allowed"])
+        self.assertEqual(report["video_manifest"]["width"], 640)
+        self.assertEqual(report["video_manifest"]["height"], 480)
 
     def test_contract_validation_rejects_missing_required_field(self) -> None:
         payload = {

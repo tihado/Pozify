@@ -34,6 +34,12 @@ class VideoManifest:
     duration_sec: float
     total_frames: int
     sampled_frames: int
+    width: int
+    height: int
+    codec: str | None
+    container: str | None
+    brightness_mean: float | None
+    blur_laplacian_var: float | None
     quality_warnings: list[str]
     analysis_allowed: bool
 
@@ -273,6 +279,12 @@ def _validate_video_manifest(value: Any, path: str) -> None:
             "duration_sec",
             "total_frames",
             "sampled_frames",
+            "width",
+            "height",
+            "codec",
+            "container",
+            "brightness_mean",
+            "blur_laplacian_var",
             "quality_warnings",
             "analysis_allowed",
         },
@@ -286,6 +298,16 @@ def _validate_video_manifest(value: Any, path: str) -> None:
     _require_int(payload["sampled_frames"], f"{path}.sampled_frames", minimum=0)
     if payload["sampled_frames"] > payload["total_frames"]:
         raise ContractValidationError(f"{path}.sampled_frames must be <= total_frames")
+    _require_int(payload["width"], f"{path}.width", minimum=0)
+    _require_int(payload["height"], f"{path}.height", minimum=0)
+    if payload["codec"] is not None:
+        _require_type(payload["codec"], str, f"{path}.codec")
+    if payload["container"] is not None:
+        _require_type(payload["container"], str, f"{path}.container")
+    if payload["brightness_mean"] is not None:
+        _require_number(payload["brightness_mean"], f"{path}.brightness_mean", minimum=0)
+    if payload["blur_laplacian_var"] is not None:
+        _require_number(payload["blur_laplacian_var"], f"{path}.blur_laplacian_var", minimum=0)
     _require_string_list(payload["quality_warnings"], f"{path}.quality_warnings")
     _require_bool(payload["analysis_allowed"], f"{path}.analysis_allowed")
 
