@@ -103,6 +103,28 @@ class PoseStepTests(unittest.TestCase):
         self.assertTrue(sequence.frames[0].pose_quality["critical_landmarks_visible"])
         self.assertEqual(sequence.pose_valid_ratio, 1.0)
 
+    def test_pose_landmarker_uses_dense_frames_for_real_backend(self) -> None:
+        path = self._write_video(frame_count=130)
+        manifest = VideoManifest(
+            video_path=str(path),
+            fps=30.0,
+            duration_sec=4.333,
+            total_frames=130,
+            sampled_frames=12,
+            width=640,
+            height=480,
+            codec="mp4v",
+            container="mp4",
+            brightness_mean=120.0,
+            blur_laplacian_var=100.0,
+            quality_warnings=[],
+            analysis_allowed=True,
+        )
+
+        sequence = pose_landmarker.run(manifest, backend=_FakePose())
+
+        self.assertEqual(len(sequence.frames), 130)
+
     def test_pose_cleaning_interpolates_smooths_and_adds_normalized_fields(self) -> None:
         first_landmarks = _landmark_result(offset=0.0).pose_landmarks
         last_landmarks = _landmark_result(offset=0.2).pose_landmarks

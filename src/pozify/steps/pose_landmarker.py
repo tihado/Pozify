@@ -33,7 +33,11 @@ def _env_pose_backend() -> str:
     return os.getenv("POZIFY_POSE_BACKEND", "mediapipe")
 
 
-def _iter_video_frames(manifest: VideoManifest) -> Iterator[tuple[int, Any]]:
+def _iter_video_frames(
+    manifest: VideoManifest,
+    *,
+    sample_count: int | None,
+) -> Iterator[tuple[int, Any]]:
     if not manifest.video_path or manifest.total_frames <= 0:
         return
 
@@ -41,8 +45,11 @@ def _iter_video_frames(manifest: VideoManifest) -> Iterator[tuple[int, Any]]:
     try:
         if not capture.isOpened():
             return
-        sample_count = min(DEFAULT_POSE_SAMPLE_COUNT, manifest.total_frames)
-        for frame_index in sample_frame_indices(manifest.total_frames, sample_count):
+        if sample_count is None:
+            frame_indices = range(manifest.total_frames)
+        else:
+            frame_indices = sample_frame_indices(manifest.total_frames, min(sample_count, manifest.total_frames))
+        for frame_index in frame_indices:
             capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
             ok, frame = capture.read()
             if ok and frame is not None:
@@ -98,7 +105,7 @@ def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequ
     valid_frames = 0
 
     with backend as extractor:
-        for frame_index, frame in _iter_video_frames(manifest):
+        for frame_index, frame in _iter_video_frames(manifest, sample_count=None):
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             detection = extractor.detect(rgb_frame, frame_index=frame_index)
             if detection.landmarks:
@@ -128,7 +135,7 @@ def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequ
 def _run_mock(manifest: VideoManifest) -> PoseSequence:
     frames: list[PoseFrame] = []
     backend = MockPoseBackend()
-    for frame_index in sample_frame_indices(manifest.total_frames):
+    for frame_index in sample_frame_indices(manifest.total_frames, DEFAULT_POSE_SAMPLE_COUNT):
         detection = backend.detect(None, frame_index=frame_index)
         frames.append(
             PoseFrame(
