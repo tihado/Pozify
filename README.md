@@ -152,6 +152,21 @@ uv run python -c "import app; from pozify.pipeline import run_pipeline; print('o
 The unit tests run the full mocked pipeline with no video input and with a small fixture path, then
 assert deterministic top-level keys for each JSON artifact.
 
+## Git Hooks
+
+Install Lefthook once per clone:
+
+```bash
+lefthook install
+```
+
+The configured `pre-commit` and `pre-push` hooks run:
+
+```bash
+uv run ruff check
+uv run python -m unittest discover -s tests
+```
+
 To run the real MediaPipe smoke test against `tests/fixtures/sample.MOV`, opt in explicitly:
 
 ```bash
