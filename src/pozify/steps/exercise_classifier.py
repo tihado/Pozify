@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pozify.contracts import ExerciseClassification, PoseSequence, UserProfile
+from pozify.exercise_catalog import DEFAULT_AUTO_EXERCISE
 
 
 def run(sequence: PoseSequence, profile: UserProfile) -> ExerciseClassification:
@@ -9,7 +10,7 @@ def run(sequence: PoseSequence, profile: UserProfile) -> ExerciseClassification:
         confidence = 0.98
         fallback_required = False
     else:
-        exercise = "push_up"
+        exercise = DEFAULT_AUTO_EXERCISE
         confidence = 0.92
         fallback_required = False
 
@@ -27,4 +28,3 @@ def run(sequence: PoseSequence, profile: UserProfile) -> ExerciseClassification:
         ],
         fallback_required=fallback_required,
     )
-
