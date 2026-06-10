@@ -89,37 +89,54 @@ def segment_low_high_low(
     min_amplitude: float,
 ) -> list[RepSegment]:
     segments: list[RepSegment] = []
-    index = 0
-    while index <= len(extrema) - 3:
-        first, second, third = extrema[index : index + 3]
-        if (first.kind, second.kind, third.kind) != ("min", "max", "min"):
-            index += 1
+    start_index = 0
+    while start_index < len(extrema):
+        first = extrema[start_index]
+        if first.kind != "min":
+            start_index += 1
             continue
 
-        if second.sample.frame_index - first.sample.frame_index < min_phase_frames:
-            index += 1
-            continue
-        if third.sample.frame_index - second.sample.frame_index < min_phase_frames:
-            index += 1
-            continue
-        if third.sample.frame_index - first.sample.frame_index < min_cycle_frames:
-            index += 1
+        accepted_segment: RepSegment | None = None
+        accepted_end_index: int | None = None
+
+        for peak_index in range(start_index + 1, len(extrema)):
+            second = extrema[peak_index]
+            if second.kind != "max":
+                continue
+            if second.sample.frame_index - first.sample.frame_index < min_phase_frames:
+                continue
+
+            for end_index in range(peak_index + 1, len(extrema)):
+                third = extrema[end_index]
+                if third.kind != "min":
+                    continue
+                if third.sample.frame_index - second.sample.frame_index < min_phase_frames:
+                    continue
+                if third.sample.frame_index - first.sample.frame_index < min_cycle_frames:
+                    continue
+
+                left_amplitude = second.sample.value - first.sample.value
+                right_amplitude = second.sample.value - third.sample.value
+                amplitude = min(left_amplitude, right_amplitude)
+                if amplitude < min_amplitude:
+                    continue
+
+                accepted_segment = RepSegment(
+                    start=first.sample,
+                    middle=second.sample,
+                    end=third.sample,
+                    amplitude=amplitude,
+                )
+                accepted_end_index = end_index
+                break
+
+            if accepted_segment is not None:
+                break
+
+        if accepted_segment is None or accepted_end_index is None:
+            start_index += 1
             continue
 
-        left_amplitude = second.sample.value - first.sample.value
-        right_amplitude = second.sample.value - third.sample.value
-        amplitude = min(left_amplitude, right_amplitude)
-        if amplitude < min_amplitude:
-            index += 1
-            continue
-
-        segments.append(
-            RepSegment(
-                start=first.sample,
-                middle=second.sample,
-                end=third.sample,
-                amplitude=amplitude,
-            )
-        )
-        index += 2
+        segments.append(accepted_segment)
+        start_index = accepted_end_index
     return segments
