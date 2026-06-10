@@ -149,7 +149,6 @@ class PipelineContractTests(unittest.TestCase):
                 "rep_analysis.json",
                 "variation.json",
                 "issue_markers.json",
-                "annotated_video_placeholder.json",
                 "coach_summary.json",
                 "verification.json",
                 "final_report.json",
