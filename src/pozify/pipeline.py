@@ -94,6 +94,14 @@ def run_pipeline(
         else "none"
     )
     analysis_mode = "mock" if mock_mode else "real"
+    mock_steps = [
+        "exercise_classifier",
+        "rep_analysis",
+        "variation_detector",
+        "issue_marker",
+        "coach_summary",
+        "verifier",
+    ]
 
     summary = coach_summary.run(profile, classification, reps, analysis, variation, issues)
     write_artifact("coach_summary.json", summary)
@@ -118,6 +126,7 @@ def run_pipeline(
             "rep_debug_path": str(run_dir / "rep_debug.json"),
             "analysis_mode": analysis_mode,
             "pose_source": pose_source,
+            "mock_steps": mock_steps,
         },
     }
     write_artifact("final_report.json", final_report)
