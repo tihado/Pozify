@@ -86,14 +86,14 @@ def run_pipeline(
     issues = issue_marker.run(classification, reps, analysis, variation)
     write_artifact("issue_markers.json", issues)
 
-    annotated_video_path = annotated_renderer.run(manifest, issues, run_dir)
-    artifact_index.append(
-        {
-            "name": "annotated_video_placeholder.json",
-            "path": str(run_dir / "annotated_video_placeholder.json"),
-            "contract": "renderer_placeholder",
-        }
+    annotated_video_path = annotated_renderer.run(manifest, cleaned_pose_sequence, reps, issues, run_dir)
+
+    pose_source = (
+        cleaned_pose_sequence.frames[0].pose_quality.get("source")
+        if cleaned_pose_sequence.frames
+        else "none"
     )
+    analysis_mode = "mock" if mock_mode else "real"
 
     summary = coach_summary.run(profile, classification, reps, analysis, variation, issues)
     write_artifact("coach_summary.json", summary)
@@ -115,6 +115,9 @@ def run_pipeline(
         "artifacts": {
             "run_dir": str(run_dir),
             "annotated_video_path": annotated_video_path,
+            "rep_debug_path": str(run_dir / "rep_debug.json"),
+            "analysis_mode": analysis_mode,
+            "pose_source": pose_source,
         },
     }
     write_artifact("final_report.json", final_report)
