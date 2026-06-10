@@ -8,7 +8,7 @@ sdk_version: "6.17.3"
 python_version: "3.14.4"
 app_file: app.py
 fullWidth: true
-short_description: Video-based workout form review app with a Gradio pipeline UI.
+short_description: Video-based workout form review app.
 tags:
   - gradio
   - computer-vision
