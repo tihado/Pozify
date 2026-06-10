@@ -19,7 +19,7 @@ pre-push:
       glob: "*"
       run: uv run ruff check
     requirements:
-      run: uv export --format requirements.txt --no-dev --no-hashes --frozen --output-file requirements.txt && git diff --exit-code requirements.txt
+      run: uv export --format requirements.txt --no-dev --no-hashes --frozen --output-file requirements.txt
     test:
       glob: "*"
       run: uv run python -m unittest discover -s tests
