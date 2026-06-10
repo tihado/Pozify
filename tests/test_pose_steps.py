@@ -21,7 +21,9 @@ from pozify.steps import pose_cleaning, pose_landmarker
 from pozify.steps.pose_backends import PoseDetection, landmark_list_to_dict
 
 
-def _landmark(x: float, y: float, z: float = 0.0, visibility: float = 0.9) -> SimpleNamespace:
+def _landmark(
+    x: float, y: float, z: float = 0.0, visibility: float = 0.9
+) -> SimpleNamespace:
     return SimpleNamespace(x=x, y=y, z=z, visibility=visibility)
 
 
@@ -67,7 +69,9 @@ class PoseStepTests(unittest.TestCase):
 
     def _write_video(self, frame_count: int = 4) -> Path:
         path = Path(self.temp_dir.name) / "pose.mp4"
-        writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (640, 480))
+        writer = cv2.VideoWriter(
+            str(path), cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (640, 480)
+        )
         self.assertTrue(writer.isOpened())
         for frame_index in range(frame_count):
             frame = np.full((480, 640, 3), 120 + frame_index, dtype=np.uint8)
@@ -125,7 +129,9 @@ class PoseStepTests(unittest.TestCase):
 
         self.assertEqual(len(sequence.frames), 130)
 
-    def test_pose_cleaning_interpolates_smooths_and_adds_normalized_fields(self) -> None:
+    def test_pose_cleaning_interpolates_smooths_and_adds_normalized_fields(
+        self,
+    ) -> None:
         first_landmarks = _landmark_result(offset=0.0).pose_landmarks
         last_landmarks = _landmark_result(offset=0.2).pose_landmarks
         first = landmark_list_to_dict(first_landmarks)

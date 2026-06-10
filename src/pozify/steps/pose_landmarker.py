@@ -48,7 +48,9 @@ def _iter_video_frames(
         if sample_count is None:
             frame_indices = range(manifest.total_frames)
         else:
-            frame_indices = sample_frame_indices(manifest.total_frames, min(sample_count, manifest.total_frames))
+            frame_indices = sample_frame_indices(
+                manifest.total_frames, min(sample_count, manifest.total_frames)
+            )
         for frame_index in frame_indices:
             capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
             ok, frame = capture.read()
@@ -68,7 +70,9 @@ def _pose_quality(landmarks: dict[str, dict[str, float]]) -> dict[str, Any]:
             "pose_warning": "pose_not_detected",
         }
 
-    visibility_values = [landmark.get("visibility", 0.0) for landmark in landmarks.values()]
+    visibility_values = [
+        landmark.get("visibility", 0.0) for landmark in landmarks.values()
+    ]
     critical_values = [
         landmarks[name].get("visibility", 0.0)
         for name in CRITICAL_LANDMARKS
@@ -86,15 +90,19 @@ def _pose_quality(landmarks: dict[str, dict[str, float]]) -> dict[str, Any]:
     return {
         "mean_visibility": round(sum(visibility_values) / len(visibility_values), 4),
         "critical_landmarks_visible": critical_visible,
-        "full_body_visibility_proxy": round(sum(full_body_values) / len(full_body_values), 4)
-        if full_body_values
-        else 0.0,
+        "full_body_visibility_proxy": (
+            round(sum(full_body_values) / len(full_body_values), 4)
+            if full_body_values
+            else 0.0
+        ),
         "landmark_count": len(landmarks),
     }
 
 
 def _empty_sequence() -> PoseSequence:
-    return PoseSequence(frames=[], normalized=False, smoothing_method="none", pose_valid_ratio=0.0)
+    return PoseSequence(
+        frames=[], normalized=False, smoothing_method="none", pose_valid_ratio=0.0
+    )
 
 
 def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequence:
@@ -113,7 +121,9 @@ def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequ
             frames.append(
                 PoseFrame(
                     frame_index=frame_index,
-                    timestamp_sec=round(frame_index / manifest.fps, 3) if manifest.fps else 0.0,
+                    timestamp_sec=(
+                        round(frame_index / manifest.fps, 3) if manifest.fps else 0.0
+                    ),
                     landmarks=detection.landmarks,
                     world_landmarks=detection.world_landmarks,
                     pose_quality={
@@ -135,12 +145,16 @@ def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequ
 def _run_mock(manifest: VideoManifest) -> PoseSequence:
     frames: list[PoseFrame] = []
     backend = MockPoseBackend()
-    for frame_index in sample_frame_indices(manifest.total_frames, DEFAULT_POSE_SAMPLE_COUNT):
+    for frame_index in sample_frame_indices(
+        manifest.total_frames, DEFAULT_POSE_SAMPLE_COUNT
+    ):
         detection = backend.detect(None, frame_index=frame_index)
         frames.append(
             PoseFrame(
                 frame_index=frame_index,
-                timestamp_sec=round(frame_index / manifest.fps, 3) if manifest.fps else 0.0,
+                timestamp_sec=(
+                    round(frame_index / manifest.fps, 3) if manifest.fps else 0.0
+                ),
                 landmarks=detection.landmarks,
                 world_landmarks=detection.world_landmarks,
                 pose_quality={
