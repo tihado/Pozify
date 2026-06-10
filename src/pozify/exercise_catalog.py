@@ -112,7 +112,7 @@ EXERCISE_CATALOG: dict[str, ExerciseSpec] = {
     ),
 }
 
-DEFAULT_AUTO_EXERCISE = "push_up"
+DEFAULT_AUTO_EXERCISE = "squat"
 EXERCISES = frozenset(EXERCISE_CATALOG)
 USER_SELECTABLE_EXERCISES = tuple(
     key for key, spec in EXERCISE_CATALOG.items() if spec.user_selectable
