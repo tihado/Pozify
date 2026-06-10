@@ -1,54 +1,144 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+import os
+from typing import Any
+
+import cv2
+
 from pozify.contracts import PoseFrame, PoseSequence, VideoManifest
+from pozify.steps.pose_backends import (
+    MockPoseBackend,
+    PoseBackend,
+    create_pose_backend,
+)
 from pozify.steps.video_qc import sample_frame_indices
 
 
-LANDMARK_NAMES = [
-    "nose",
+CRITICAL_LANDMARKS = {
     "left_shoulder",
     "right_shoulder",
-    "left_elbow",
-    "right_elbow",
-    "left_wrist",
-    "right_wrist",
     "left_hip",
     "right_hip",
     "left_knee",
     "right_knee",
     "left_ankle",
     "right_ankle",
-]
+}
+FULL_BODY_LANDMARKS = CRITICAL_LANDMARKS | {"left_wrist", "right_wrist"}
+DEFAULT_POSE_SAMPLE_COUNT = 120
 
 
-def _mock_landmarks(frame_index: int) -> dict[str, dict[str, float]]:
-    phase = (frame_index % 90) / 90
-    vertical_offset = 0.08 if phase < 0.5 else 0.0
-    landmarks: dict[str, dict[str, float]] = {}
-    for idx, name in enumerate(LANDMARK_NAMES):
-        side_offset = -0.06 if "left" in name else 0.06 if "right" in name else 0.0
-        base_y = 0.2 + min(idx, 11) * 0.045
-        landmarks[name] = {
-            "x": round(0.5 + side_offset, 4),
-            "y": round(base_y + vertical_offset, 4),
-            "z": round(-0.02 * side_offset, 4),
-            "visibility": 0.95,
+def _env_pose_backend() -> str:
+    return os.getenv("POZIFY_POSE_BACKEND", "mediapipe")
+
+
+def _iter_video_frames(manifest: VideoManifest) -> Iterator[tuple[int, Any]]:
+    if not manifest.video_path or manifest.total_frames <= 0:
+        return
+
+    capture = cv2.VideoCapture(manifest.video_path)
+    try:
+        if not capture.isOpened():
+            return
+        sample_count = min(DEFAULT_POSE_SAMPLE_COUNT, manifest.total_frames)
+        for frame_index in sample_frame_indices(manifest.total_frames, sample_count):
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            ok, frame = capture.read()
+            if ok and frame is not None:
+                yield frame_index, frame
+    finally:
+        capture.release()
+
+
+def _pose_quality(landmarks: dict[str, dict[str, float]]) -> dict[str, Any]:
+    if not landmarks:
+        return {
+            "mean_visibility": 0.0,
+            "critical_landmarks_visible": False,
+            "full_body_visibility_proxy": 0.0,
+            "landmark_count": 0,
+            "pose_warning": "pose_not_detected",
         }
-    return landmarks
+
+    visibility_values = [landmark.get("visibility", 0.0) for landmark in landmarks.values()]
+    critical_values = [
+        landmarks[name].get("visibility", 0.0)
+        for name in CRITICAL_LANDMARKS
+        if name in landmarks
+    ]
+    full_body_values = [
+        landmarks[name].get("visibility", 0.0)
+        for name in FULL_BODY_LANDMARKS
+        if name in landmarks
+    ]
+    critical_visible = (
+        len(critical_values) == len(CRITICAL_LANDMARKS)
+        and min(critical_values, default=0.0) >= 0.5
+    )
+    return {
+        "mean_visibility": round(sum(visibility_values) / len(visibility_values), 4),
+        "critical_landmarks_visible": critical_visible,
+        "full_body_visibility_proxy": round(sum(full_body_values) / len(full_body_values), 4)
+        if full_body_values
+        else 0.0,
+        "landmark_count": len(landmarks),
+    }
 
 
-def run(manifest: VideoManifest) -> PoseSequence:
+def _empty_sequence() -> PoseSequence:
+    return PoseSequence(frames=[], normalized=False, smoothing_method="none", pose_valid_ratio=0.0)
+
+
+def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequence:
+    if not manifest.analysis_allowed or not manifest.video_path:
+        return _empty_sequence()
+
     frames: list[PoseFrame] = []
+    valid_frames = 0
+
+    with backend as extractor:
+        for frame_index, frame in _iter_video_frames(manifest):
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            detection = extractor.detect(rgb_frame, frame_index=frame_index)
+            if detection.landmarks:
+                valid_frames += 1
+            frames.append(
+                PoseFrame(
+                    frame_index=frame_index,
+                    timestamp_sec=round(frame_index / manifest.fps, 3) if manifest.fps else 0.0,
+                    landmarks=detection.landmarks,
+                    world_landmarks=detection.world_landmarks,
+                    pose_quality={
+                        **_pose_quality(detection.landmarks),
+                        "source": detection.source,
+                    },
+                )
+            )
+
+    pose_valid_ratio = round(valid_frames / len(frames), 4) if frames else 0.0
+    return PoseSequence(
+        frames=frames,
+        normalized=False,
+        smoothing_method="none",
+        pose_valid_ratio=pose_valid_ratio,
+    )
+
+
+def _run_mock(manifest: VideoManifest) -> PoseSequence:
+    frames: list[PoseFrame] = []
+    backend = MockPoseBackend()
     for frame_index in sample_frame_indices(manifest.total_frames):
+        detection = backend.detect(None, frame_index=frame_index)
         frames.append(
             PoseFrame(
                 frame_index=frame_index,
-                timestamp_sec=round(frame_index / manifest.fps, 3),
-                landmarks=_mock_landmarks(frame_index),
-                world_landmarks={},
+                timestamp_sec=round(frame_index / manifest.fps, 3) if manifest.fps else 0.0,
+                landmarks=detection.landmarks,
+                world_landmarks=detection.world_landmarks,
                 pose_quality={
-                    "mean_visibility": 0.95,
-                    "critical_landmarks_visible": True,
+                    **_pose_quality(detection.landmarks),
+                    "source": detection.source,
                     "mock": True,
                 },
             )
@@ -58,5 +148,20 @@ def run(manifest: VideoManifest) -> PoseSequence:
         frames=frames,
         normalized=False,
         smoothing_method="none",
-        pose_valid_ratio=1.0,
+        pose_valid_ratio=1.0 if frames else 0.0,
     )
+
+
+def run(
+    manifest: VideoManifest,
+    *,
+    mock: bool = False,
+    backend_name: str | None = None,
+    backend: PoseBackend | None = None,
+) -> PoseSequence:
+    if mock:
+        return _run_mock(manifest)
+    if backend is not None:
+        return _run_with_backend(manifest, backend)
+    selected_backend = create_pose_backend(backend_name or _env_pose_backend())
+    return _run_with_backend(manifest, selected_backend)
