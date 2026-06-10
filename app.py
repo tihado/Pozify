@@ -180,9 +180,10 @@ with gr.Blocks(title="Pozify") as demo:
             )
             run_button = gr.Button("Analyze", variant="primary")
 
-        with gr.Column(scale=2):
+        with gr.Column(scale=1):
             annotated_video = gr.Video(label="Annotated video")
-            summary_md = gr.Markdown(label="Summary")
+
+    summary_md = gr.Markdown(label="Summary")
 
     with gr.Tab("Final Report JSON"):
         report_json = gr.Code(label="final_report.json", language="json", lines=28)
