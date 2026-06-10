@@ -47,6 +47,18 @@ def _quality_markdown(video_manifest: dict[str, Any]) -> str:
 """
 
 
+def _mock_status_markdown(report: dict[str, Any]) -> str:
+    mock_steps = report["artifacts"].get("mock_steps", [])
+    if not mock_steps:
+        return ""
+    steps = ", ".join(f"`{step}`" for step in mock_steps)
+    return (
+        "## Pipeline Status\n\n"
+        "The current run uses real video QC, pose extraction, rep segmentation, and annotated video rendering, "
+        f"but these steps still use placeholders: {steps}."
+    )
+
+
 def analyze_video(
     video_path: str | None,
     goal: str,
@@ -70,9 +82,12 @@ def analyze_video(
 
     report = result["final_report"]
     video_quality = _quality_markdown(report["video_manifest"])
+    mock_status = _mock_status_markdown(report)
     summary = report["coach_summary"]
     if not report["video_manifest"]["analysis_allowed"]:
         markdown = f"""{video_quality}
+
+{mock_status}
 
 ## Run
 
@@ -89,13 +104,15 @@ def analyze_video(
 
     markdown = f"""## Scan Summary
 
-- **Exercise:** {report["exercise"]["exercise"]} ({report["exercise"]["confidence"]:.0%} confidence)
-- **Variation:** {report["variation"]["detected_variation"]} ({report["variation"]["variation_confidence"]:.0%} confidence)
+- **Exercise router output:** {report["exercise"]["exercise"]} (mock confidence placeholder: {report["exercise"]["confidence"]:.0%})
+- **Variation label:** {report["variation"]["detected_variation"]} (mock confidence placeholder: {report["variation"]["variation_confidence"]:.0%})
 - **Reps:** {len(report["reps"]["reps"])}
 - **Analysis mode:** {report["artifacts"].get("analysis_mode", "unknown")}
 - **Pose source:** {report["artifacts"].get("pose_source", "unknown")}
-- **Main finding:** {summary["main_findings"][0] if summary["main_findings"] else "No major issue detected"}
+- **Mock finding:** {summary["main_findings"][0] if summary["main_findings"] else "No mock finding emitted"}
 - **Run ID:** `{report["run_id"]}`
+
+{mock_status}
 
 ## Coach Notes
 
