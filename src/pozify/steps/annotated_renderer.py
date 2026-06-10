@@ -23,6 +23,8 @@ SKELETON_EDGES = [
     ("right_knee", "right_ankle"),
 ]
 
+PREFERRED_VIDEO_CODECS = ("avc1", "H264", "mp4v")
+
 
 def _frame_landmark_points(
     frame_landmarks: dict[str, dict[str, float]],
@@ -101,6 +103,20 @@ def _draw_overlays(
         )
 
 
+def _open_video_writer(output_path: Path, fps: float, width: int, height: int) -> tuple[cv2.VideoWriter | None, str | None]:
+    for codec in PREFERRED_VIDEO_CODECS:
+        writer = cv2.VideoWriter(
+            str(output_path),
+            cv2.VideoWriter_fourcc(*codec),
+            fps,
+            (width, height),
+        )
+        if writer.isOpened():
+            return writer, codec
+        writer.release()
+    return None, None
+
+
 def run(
     manifest: VideoManifest,
     pose_sequence: PoseSequence,
@@ -124,13 +140,8 @@ def run(
         return manifest.video_path
 
     output_path = run_dir / "annotated_video.mp4"
-    writer = cv2.VideoWriter(
-        str(output_path),
-        cv2.VideoWriter_fourcc(*"mp4v"),
-        fps,
-        (width, height),
-    )
-    if not writer.isOpened():
+    writer, _codec = _open_video_writer(output_path, fps, width, height)
+    if writer is None:
         capture.release()
         return manifest.video_path
 
