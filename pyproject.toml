@@ -5,6 +5,7 @@ description = "Gradio base app for Pozify with mocked pipeline steps and explici
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.136.3",
     "gradio>=4.44.0",
     "mediapipe>=0.10.35",
     "numpy>=1.26.0",
