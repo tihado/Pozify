@@ -22,29 +22,29 @@ def run(
     issue_labels = [issue.issue for issue in issues.issues]
     main_issue = issue_labels[0] if issue_labels else "no_major_issue"
     issue_text = (
-        f"The main mocked finding is `{main_issue}`, mostly appearing in later reps."
+        f"The current mock issue placeholder is `{main_issue}`, mostly appearing in later reps."
         if issues.issues
-        else "The mocked analysis did not detect a major issue."
+        else "The current mock issue layer did not emit a major issue."
     )
 
     return CoachSummary(
         summary=(
-            f"You completed {len(reps.reps)} mocked {classification.exercise} reps. "
-            f"The detected variation is `{variation.detected_variation}`. {issue_text} "
-            f"This feedback is practice-oriented and based on structured mock metrics."
+            f"The pipeline segmented {len(reps.reps)} {classification.exercise} reps from the current pose stream. "
+            f"Exercise routing, variation labeling, issue labeling, and coaching language still use mock placeholders. "
+            f"The current placeholder variation is `{variation.detected_variation}`. {issue_text}"
         ),
         what_went_well=[
-            f"Average range of motion score is {analysis.aggregate_metrics['avg_rom_score']}.",
-            f"Average symmetry score is {analysis.aggregate_metrics['avg_symmetry_score']}.",
+            f"Current placeholder ROM score is {analysis.aggregate_metrics['avg_rom_score']}.",
+            f"Current placeholder symmetry score is {analysis.aggregate_metrics['avg_symmetry_score']}.",
         ],
         main_findings=[
-            f"{main_issue} detected in {len(issues.issues)} rep(s)."
+            f"Mock issue placeholder `{main_issue}` appears in {len(issues.issues)} rep(s)."
             if issues.issues
-            else "No major mocked issue detected."
+            else "No mock issue placeholder detected."
         ],
         variation_explanation=(
-            f"`{variation.detected_variation}` is treated as the selected/detected variation. "
-            f"These labels are kept separate from true issue labels."
+            f"`{variation.detected_variation}` is currently a placeholder variation label. "
+            f"It should not be treated as a verified movement diagnosis yet."
         ),
         top_fixes=[
             "Keep the same setup and record from a stable camera angle.",
@@ -57,8 +57,7 @@ def run(
             "Compare the next run against this report's issue timeline.",
         ],
         confidence_notes=[
-            f"Exercise classifier confidence: {classification.confidence:.0%}.",
-            "This is mock output; replace step implementations before using as real coaching.",
+            f"Current mock classifier confidence placeholder: {classification.confidence:.0%}.",
+            "Rep segmentation can run on real pose, but downstream interpretation is still partially mocked.",
         ],
     )
-
