@@ -160,7 +160,7 @@ class PipelineContractTests(unittest.TestCase):
 
         self._assert_pipeline_artifacts(result)
         report = result["final_report"]
-        self.assertEqual(report["exercise"]["exercise"], "push_up")
+        self.assertEqual(report["exercise"]["exercise"], "squat")
         self.assertEqual(report["video_manifest"]["quality_warnings"], ["video_decode_failed"])
         self.assertFalse(report["video_manifest"]["analysis_allowed"])
 
