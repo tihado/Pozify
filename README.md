@@ -91,6 +91,23 @@ Each analysis run creates a folder under `runs/<run_id>/`:
 mock mode. JSON artifacts are validated before they are written, including required fields, supported
 enum values, score ranges, frame/timestamp ordering, and final report shape.
 
+`video_manifest.json` is produced from OpenCV metadata and sampled-frame quality checks. It includes
+FPS, duration, frame count, sampled frame count, resolution, codec/container when available,
+brightness, blur score, warning labels, and `analysis_allowed`.
+
+Video quality warning labels:
+
+- `too_short`
+- `too_long`
+- `too_dark`
+- `too_blurry`
+- `fps_too_low`
+- `resolution_too_low`
+- `video_decode_failed`
+
+Decode failures set `analysis_allowed=false`; the Gradio UI surfaces capture guidance instead of
+coach-style feedback when analysis is blocked.
+
 `annotated_video.mp4` is not implemented yet. The mocked renderer currently returns the original input video path and writes `annotated_video_placeholder.json`.
 
 ## Replacing Mock Steps
