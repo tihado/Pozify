@@ -1,3 +1,22 @@
+---
+title: Pozify
+emoji: 🏋️
+colorFrom: green
+colorTo: blue
+sdk: gradio
+sdk_version: "6.17.3"
+python_version: "3.14.4"
+app_file: app.py
+fullWidth: true
+short_description: Video-based workout form review app with a Gradio pipeline UI.
+tags:
+  - gradio
+  - computer-vision
+  - pose-estimation
+  - fitness
+  - video-analysis
+---
+
 # Pozify
 
 Pozify is a Gradio + uv base project for a video-based workout form review app.

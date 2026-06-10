@@ -4,6 +4,10 @@ pre-commit:
     lint:
       glob: "*"
       run: uv run ruff check
+    requirements:
+      run: uv export --format requirements.txt --no-dev --no-hashes --frozen --output-file requirements.txt
+      files: echo requirements.txt
+      stage_fixed: true
     test:
       glob: "*"
       run: uv run python -m unittest discover -s tests
@@ -14,6 +18,8 @@ pre-push:
     lint:
       glob: "*"
       run: uv run ruff check
+    requirements:
+      run: uv export --format requirements.txt --no-dev --no-hashes --frozen --output-file requirements.txt && git diff --exit-code requirements.txt
     test:
       glob: "*"
       run: uv run python -m unittest discover -s tests
