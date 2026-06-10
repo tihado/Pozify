@@ -165,6 +165,7 @@ def validate_contract(name: str, value: Any) -> None:
         "video_manifest.json": _validate_video_manifest,
         "pose_sequence.json": _validate_pose_sequence,
         "exercise_classification.json": _validate_exercise_classification,
+        "rep_debug.json": _validate_rep_debug,
         "reps.json": _validate_reps,
         "rep_analysis.json": _validate_rep_analysis,
         "variation.json": _validate_variation,
@@ -385,6 +386,30 @@ def _validate_reps(value: Any, path: str) -> None:
     for index, rep in enumerate(payload["reps"]):
         _validate_rep(rep, f"{path}.reps[{index}]")
     _require_type(payload["partial_reps"], list, f"{path}.partial_reps")
+
+
+def _validate_rep_debug(value: Any, path: str) -> None:
+    payload = _require_mapping(value, path)
+    _require_fields(
+        payload,
+        {
+            "accepted_reps",
+            "body_line_mean",
+            "extrema",
+            "raw_signal_range",
+            "selected_signal",
+            "thresholds",
+            "usable_signal_samples",
+        },
+        path,
+    )
+    _require_type(payload["accepted_reps"], list, f"{path}.accepted_reps")
+    _require_number(payload["body_line_mean"], f"{path}.body_line_mean")
+    _require_type(payload["extrema"], list, f"{path}.extrema")
+    _require_number(payload["raw_signal_range"], f"{path}.raw_signal_range", minimum=0)
+    _require_type(payload["selected_signal"], str, f"{path}.selected_signal")
+    _require_mapping(payload["thresholds"], f"{path}.thresholds")
+    _require_int(payload["usable_signal_samples"], f"{path}.usable_signal_samples", minimum=0)
 
 
 def _validate_rep_analysis(value: Any, path: str) -> None:

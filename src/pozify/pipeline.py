@@ -73,8 +73,9 @@ def run_pipeline(
     classification = exercise_classifier.run(cleaned_pose_sequence, profile)
     write_artifact("exercise_classification.json", classification)
 
-    reps = rep_counter.run(classification, cleaned_pose_sequence)
+    reps, rep_debug = rep_counter.run(classification, cleaned_pose_sequence)
     write_artifact("reps.json", reps)
+    write_artifact("rep_debug.json", rep_debug)
 
     analysis = rep_analysis.run(classification, reps, cleaned_pose_sequence)
     write_artifact("rep_analysis.json", analysis)
