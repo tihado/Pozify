@@ -9,6 +9,8 @@ dependencies = [
     "mediapipe>=0.10.35",
     "numpy>=1.26.0",
     "opencv-python-headless>=4.10.0",
+    # HF Spaces installs gradio[mcp,oauth], which requires pydantic<=2.12.5.
+    "pydantic>=2.11.10,<=2.12.5",
 ]
 
 [project.optional-dependencies]

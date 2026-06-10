@@ -129,11 +129,12 @@ pillow==12.2.0
     #   matplotlib
 pycparser==3.0 ; implementation_name != 'PyPy'
     # via cffi
-pydantic==2.13.4
+pydantic==2.12.5
     # via
     #   fastapi
     #   gradio
-pydantic-core==2.46.4
+    #   pozify
+pydantic-core==2.41.5
     # via pydantic
 pydub==0.25.1
     # via gradio
