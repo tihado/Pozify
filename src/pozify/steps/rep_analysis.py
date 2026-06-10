@@ -39,14 +39,16 @@ def run(
             )
         )
 
+    aggregate_metrics = {
+        "avg_rom_score": round(mean(item.range_of_motion_score for item in items), 2) if items else 0.0,
+        "avg_stability_score": round(mean(item.stability_score for item in items), 2) if items else 0.0,
+        "avg_symmetry_score": round(mean(item.symmetry_score for item in items), 2) if items else 0.0,
+        "pose_valid_ratio": sequence.pose_valid_ratio,
+        "mock": True,
+    }
+
     return RepAnalysis(
         exercise=classification.exercise,
         items=items,
-        aggregate_metrics={
-            "avg_rom_score": round(mean(item.range_of_motion_score for item in items), 2),
-            "avg_stability_score": round(mean(item.stability_score for item in items), 2),
-            "avg_symmetry_score": round(mean(item.symmetry_score for item in items), 2),
-            "pose_valid_ratio": sequence.pose_valid_ratio,
-            "mock": True,
-        },
+        aggregate_metrics=aggregate_metrics,
     )
