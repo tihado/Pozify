@@ -38,8 +38,6 @@ def run_pipeline(
     mock: bool | None = None,
 ) -> dict[str, Any]:
     mock_mode = _env_mock_mode() if mock is None else mock
-    if not mock_mode:
-        raise NotImplementedError("Only mock pipeline implementations are available right now.")
 
     run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
     run_dir = RUNS_DIR / run_id
@@ -68,7 +66,7 @@ def run_pipeline(
     manifest = video_qc.run(video_path)
     write_artifact("video_manifest.json", manifest)
 
-    pose_sequence = pose_landmarker.run(manifest)
+    pose_sequence = pose_landmarker.run(manifest, mock=mock_mode)
     cleaned_pose_sequence = pose_cleaning.run(pose_sequence)
     write_artifact("pose_sequence.json", cleaned_pose_sequence)
 
