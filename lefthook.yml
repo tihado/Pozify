@@ -5,7 +5,7 @@ pre-commit:
       glob: "*"
       run: uv run ruff check
     requirements:
-      run: uv export --format requirements.txt --no-dev --no-hashes --frozen --output-file requirements.txt
+      run: uv export --format requirements.txt --no-dev --no-hashes --frozen --quiet --output-file requirements.txt
       files: echo requirements.txt
       stage_fixed: true
     test:
@@ -19,7 +19,7 @@ pre-push:
       glob: "*"
       run: uv run ruff check
     requirements:
-      run: uv export --format requirements.txt --no-dev --no-hashes --frozen --output-file requirements.txt
+      run: uv export --format requirements.txt --no-dev --no-hashes --frozen --quiet --output-file requirements.txt
     test:
       glob: "*"
       run: uv run python -m unittest discover -s tests
