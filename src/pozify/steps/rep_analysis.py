@@ -13,6 +13,10 @@ from pozify.contracts import (
 from pozify.exercise_catalog import get_exercise_spec
 
 
+def _clamp_score(value: float) -> float:
+    return round(min(1.0, max(0.0, value)), 2)
+
+
 def _metrics_for_exercise(exercise: str, rep_id: int) -> dict[str, Any]:
     fatigue_penalty = max(0, rep_id - 3) * 0.08
     return get_exercise_spec(exercise).metric_factory(rep_id, fatigue_penalty)
@@ -31,9 +35,9 @@ def run(
             RepAnalysisItem(
                 rep_id=rep.rep_id,
                 duration_sec=round(rep.end_sec - rep.start_sec, 2),
-                range_of_motion_score=round(0.88 - fatigue_penalty, 2),
-                stability_score=round(0.86 - fatigue_penalty, 2),
-                symmetry_score=round(0.9 - fatigue_penalty / 2, 2),
+                range_of_motion_score=_clamp_score(0.88 - fatigue_penalty),
+                stability_score=_clamp_score(0.86 - fatigue_penalty),
+                symmetry_score=_clamp_score(0.9 - fatigue_penalty / 2),
                 metrics=_metrics_for_exercise(classification.exercise, rep.rep_id),
                 variation_hints=list(exercise_spec.variation_hints),
             )
