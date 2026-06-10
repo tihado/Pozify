@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Literal
+from typing import Any
+
+from pozify.exercise_catalog import EXERCISES, INTENDED_EXERCISES
 
 
-Exercise = Literal["squat", "push_up", "shoulder_press", "unknown"]
-
-EXERCISES = {"squat", "push_up", "shoulder_press", "unknown"}
-INTENDED_EXERCISES = EXERCISES | {"auto"}
+Exercise = str
 GOALS = {"strength", "hypertrophy", "endurance", "mobility", "beginner_practice"}
 EXPERIENCE_LEVELS = {"beginner", "intermediate"}
 EQUIPMENT = {"bodyweight", "dumbbell", "barbell", "unknown"}

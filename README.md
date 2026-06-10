@@ -131,6 +131,21 @@ coach-style feedback when analysis is blocked.
 
 Each step lives in `src/pozify/steps/` and exposes a `run(...)` function.
 
+## Adding Exercises
+
+Supported exercise metadata is centralized in `src/pozify/exercise_catalog.py`. To add a new mocked
+exercise, add one `ExerciseSpec` with:
+
+- `key` and `display_name`
+- `default_variation` and confidence
+- `metric_factory` for mock per-rep metrics
+- optional `variation_hints`, default `not_issues`, and `mock_issue`
+
+The Gradio dropdown, profile validation, variation detector, rep analysis, and issue marker read from
+this catalog, so new exercises do not require changing each step just to become selectable. Real
+exercise-specific algorithms can still replace individual step implementations later while preserving
+the same pipeline contracts.
+
 Recommended replacement order:
 
 1. `video_qc.py`: read real video metadata with OpenCV.

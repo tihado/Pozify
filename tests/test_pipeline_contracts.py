@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify import pipeline
 from pozify.contracts import ContractValidationError, UserProfile, validate_contract
+from pozify.exercise_catalog import USER_SELECTABLE_EXERCISES
 
 
 PROFILE_INPUT = {
@@ -198,6 +199,32 @@ class PipelineContractTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ContractValidationError, "invalid enum"):
             validate_contract("user_profile.json", profile)
+
+    def test_catalog_exercises_are_valid_profile_inputs(self) -> None:
+        for exercise in USER_SELECTABLE_EXERCISES:
+            with self.subTest(exercise=exercise):
+                profile = UserProfile(
+                    goal="beginner_practice",
+                    experience_level="beginner",
+                    intended_exercise=exercise,
+                    intended_variation=None,
+                    known_limitations=[],
+                    equipment="bodyweight",
+                )
+
+                validate_contract("user_profile.json", profile)
+
+    def test_pipeline_runs_for_each_catalog_exercise(self) -> None:
+        for exercise in USER_SELECTABLE_EXERCISES:
+            with self.subTest(exercise=exercise):
+                result = pipeline.run_pipeline(
+                    video_path=None,
+                    profile_input={**PROFILE_INPUT, "intended_exercise": exercise},
+                    mock=True,
+                )
+
+                report = result["final_report"]
+                self.assertEqual(report["exercise"]["exercise"], exercise)
 
 
 if __name__ == "__main__":

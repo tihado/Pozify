@@ -9,6 +9,7 @@ import gradio as gr
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
+from pozify.exercise_catalog import USER_SELECTABLE_EXERCISES
 from pozify.pipeline import run_pipeline
 
 
@@ -141,7 +142,7 @@ with gr.Blocks(title="Pozify") as demo:
             )
             intended_exercise = gr.Dropdown(
                 label="Intended exercise",
-                choices=["auto", "squat", "push_up", "shoulder_press"],
+                choices=["auto", *USER_SELECTABLE_EXERCISES],
                 value="auto",
             )
             intended_variation = gr.Textbox(

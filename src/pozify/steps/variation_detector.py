@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pozify.contracts import ExerciseClassification, RepAnalysis, UserProfile, Variation
+from pozify.exercise_catalog import get_exercise_spec
 
 
 def run(
@@ -8,23 +9,19 @@ def run(
     analysis: RepAnalysis,
     profile: UserProfile,
 ) -> Variation:
+    exercise_spec = get_exercise_spec(classification.exercise)
     if profile.intended_variation:
         variation = profile.intended_variation
         confidence = 0.95
-    elif classification.exercise == "push_up":
-        variation = "wide_grip_push_up"
-        confidence = 0.84
-    elif classification.exercise == "squat":
-        variation = "bodyweight_squat"
-        confidence = 0.82
-    elif classification.exercise == "shoulder_press":
-        variation = "standing_shoulder_press"
-        confidence = 0.8
     else:
-        variation = "unknown"
-        confidence = 0.3
+        variation = exercise_spec.default_variation
+        confidence = exercise_spec.default_variation_confidence
 
-    not_issues = ["wide_hand_placement"] if variation == "wide_grip_push_up" else []
+    not_issues = (
+        list(exercise_spec.default_variation_not_issues)
+        if variation == exercise_spec.default_variation
+        else []
+    )
     if analysis.aggregate_metrics.get("avg_rom_score", 1.0) < 0.7:
         not_issues.append("mock_low_rom_requires_user_intent_check")
 
@@ -34,4 +31,3 @@ def run(
         variation_confidence=confidence,
         not_issues=not_issues,
     )
-
