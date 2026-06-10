@@ -18,6 +18,16 @@ uv run gradio app.py
 
 The app runs at `http://127.0.0.1:7860` by default.
 
+The pipeline runs in mock mode by default. To be explicit in scripts, call
+`run_pipeline(..., mock=True)` or set:
+
+```bash
+POZIFY_MOCK_MODE=1 uv run python app.py
+```
+
+Setting `POZIFY_MOCK_MODE=0` currently raises `NotImplementedError` until real model-backed
+steps are added.
+
 ## Pipeline
 
 ```text
@@ -64,6 +74,7 @@ docs/
 
 Each analysis run creates a folder under `runs/<run_id>/`:
 
+- `manifest.json`
 - `user_profile.json`
 - `video_manifest.json`
 - `pose_sequence.json`
@@ -75,6 +86,10 @@ Each analysis run creates a folder under `runs/<run_id>/`:
 - `coach_summary.json`
 - `verification.json`
 - `final_report.json`
+
+`manifest.json` indexes the generated artifacts in pipeline order and records whether the run used
+mock mode. JSON artifacts are validated before they are written, including required fields, supported
+enum values, score ranges, frame/timestamp ordering, and final report shape.
 
 `annotated_video.mp4` is not implemented yet. The mocked renderer currently returns the original input video path and writes `annotated_video_placeholder.json`.
 
@@ -95,6 +110,10 @@ Recommended replacement order:
 ## Development Checks
 
 ```bash
+uv run python -m unittest discover -s tests
 python3 -m py_compile app.py src/pozify/*.py src/pozify/steps/*.py
 uv run python -c "import app; from pozify.pipeline import run_pipeline; print('ok')"
 ```
+
+The unit tests run the full mocked pipeline with no video input and with a small fixture path, then
+assert deterministic top-level keys for each JSON artifact.
