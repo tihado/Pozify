@@ -92,6 +92,8 @@ def analyze_video(
 - **Exercise:** {report["exercise"]["exercise"]} ({report["exercise"]["confidence"]:.0%} confidence)
 - **Variation:** {report["variation"]["detected_variation"]} ({report["variation"]["variation_confidence"]:.0%} confidence)
 - **Reps:** {len(report["reps"]["reps"])}
+- **Analysis mode:** {report["artifacts"].get("analysis_mode", "unknown")}
+- **Pose source:** {report["artifacts"].get("pose_source", "unknown")}
 - **Main finding:** {summary["main_findings"][0] if summary["main_findings"] else "No major issue detected"}
 - **Run ID:** `{report["run_id"]}`
 
@@ -162,7 +164,7 @@ with gr.Blocks(title="Pozify") as demo:
             run_button = gr.Button("Analyze", variant="primary")
 
         with gr.Column(scale=2):
-            annotated_video = gr.Video(label="Annotated video placeholder")
+            annotated_video = gr.Video(label="Annotated video")
             summary_md = gr.Markdown(label="Summary")
 
     with gr.Tab("Final Report JSON"):
