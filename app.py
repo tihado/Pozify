@@ -54,9 +54,31 @@ def _mock_status_markdown(report: dict[str, Any]) -> str:
     steps = ", ".join(f"`{step}`" for step in mock_steps)
     return (
         "## Pipeline Status\n\n"
-        "The current run uses real video QC, pose extraction, rep segmentation, and annotated video rendering, "
+        "The current run uses real video QC, pose extraction, rep segmentation, "
+        "rep analysis, variation detection, and annotated video rendering, "
         f"but these steps still use placeholders: {steps}."
     )
+
+
+def _metrics_markdown(report: dict[str, Any]) -> str:
+    metrics = report["rep_analysis"]["aggregate_metrics"]
+    lines = [
+        "## Movement Metrics",
+        "",
+        f"- **Average ROM score:** {metrics.get('avg_rom_score', 0):.0%}",
+        f"- **Average stability score:** {metrics.get('avg_stability_score', 0):.0%}",
+        f"- **Average symmetry score:** {metrics.get('avg_symmetry_score', 0):.0%}",
+        f"- **Average rep duration:** {metrics.get('avg_rep_duration_sec', 0)}s",
+        f"- **Tempo consistency:** {metrics.get('avg_tempo_consistency_score', 0):.0%}",
+        f"- **ROM fatigue trend:** {metrics.get('fatigue_trend_rom_delta', 0):+.2f}",
+    ]
+    if "avg_hand_width_ratio" in metrics:
+        lines.append(f"- **Hand width ratio:** {metrics['avg_hand_width_ratio']:.2f}")
+    if "avg_stance_width_ratio" in metrics:
+        lines.append(f"- **Stance width ratio:** {metrics['avg_stance_width_ratio']:.2f}")
+    if "avg_lockout_quality" in metrics:
+        lines.append(f"- **Lockout quality:** {metrics['avg_lockout_quality']:.0%}")
+    return "\n".join(lines)
 
 
 def analyze_video(
@@ -83,7 +105,18 @@ def analyze_video(
     report = result["final_report"]
     video_quality = _quality_markdown(report["video_manifest"])
     mock_status = _mock_status_markdown(report)
+    movement_metrics = _metrics_markdown(report)
     summary = report["coach_summary"]
+    exercise = report["exercise"]
+    variation = report["variation"]
+    exercise_line = (
+        f'{exercise["exercise"]} (mock confidence placeholder: {exercise["confidence"]:.0%})'
+    )
+    variation_line = (
+        f'{variation["detected_variation"]} '
+        f'(confidence: {variation["variation_confidence"]:.0%})'
+    )
+    finding = summary["main_findings"][0] if summary["main_findings"] else "No mock finding emitted"
     if not report["video_manifest"]["analysis_allowed"]:
         markdown = f"""{video_quality}
 
@@ -104,13 +137,15 @@ def analyze_video(
 
     markdown = f"""## Scan Summary
 
-- **Exercise router output:** {report["exercise"]["exercise"]} (mock confidence placeholder: {report["exercise"]["confidence"]:.0%})
-- **Variation label:** {report["variation"]["detected_variation"]} (mock confidence placeholder: {report["variation"]["variation_confidence"]:.0%})
+- **Exercise router output:** {exercise_line}
+- **Variation label:** {variation_line}
 - **Reps:** {len(report["reps"]["reps"])}
 - **Analysis mode:** {report["artifacts"].get("analysis_mode", "unknown")}
 - **Pose source:** {report["artifacts"].get("pose_source", "unknown")}
-- **Mock finding:** {summary["main_findings"][0] if summary["main_findings"] else "No mock finding emitted"}
+- **Mock finding:** {finding}
 - **Run ID:** `{report["run_id"]}`
+
+{movement_metrics}
 
 {mock_status}
 

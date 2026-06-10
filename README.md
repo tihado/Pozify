@@ -168,18 +168,18 @@ Each step lives in `src/pozify/steps/` and exposes a `run(...)` function.
 
 ## Adding Exercises
 
-Supported exercise metadata is centralized in `src/pozify/exercise_catalog.py`. To add a new mocked
+Supported exercise metadata is centralized in `src/pozify/exercise_catalog.py`. To add a new
 exercise, add one `ExerciseSpec` with:
 
 - `key` and `display_name`
 - `default_variation` and confidence
-- `metric_factory` for mock per-rep metrics
+- `metric_factory` for legacy/mock fallback metadata
 - optional `variation_hints`, default `not_issues`, and `mock_issue`
 
 The Gradio dropdown, profile validation, variation detector, rep analysis, and issue marker read from
 this catalog, so new exercises do not require changing each step just to become selectable. Real
-exercise-specific algorithms can still replace individual step implementations later while preserving
-the same pipeline contracts.
+exercise-specific rep metrics live in `src/pozify/steps/rep_analysis.py`; variation rules live in
+`src/pozify/steps/variation_detector.py`.
 
 Recommended replacement order:
 
@@ -187,7 +187,7 @@ Recommended replacement order:
 2. `pose_backends/`: add or refine pose model adapters such as MediaPipe or MMPose.
 3. `exercise_classifier.py`: load the exercise router model.
 4. `rep_counter.py`: implement exercise-specific state machines.
-5. `rep_analysis.py` and `issue_marker.py`: compute real metrics and issue scores.
+5. `issue_marker.py`: compute real issue scores and intervals from rep metrics.
 6. `annotated_renderer.py`: render skeleton overlays and issue highlights.
 7. `coach_summary.py`: call the selected small language model with retrieved knowledge cards.
 
