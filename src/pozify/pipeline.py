@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -25,9 +26,34 @@ from pozify.steps import (
 RUNS_DIR = Path("runs")
 
 
-def run_pipeline(video_path: str | None, profile_input: dict[str, Any]) -> dict[str, Any]:
+def _env_mock_mode() -> bool:
+    value = os.getenv("POZIFY_MOCK_MODE", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def run_pipeline(
+    video_path: str | None,
+    profile_input: dict[str, Any],
+    *,
+    mock: bool | None = None,
+) -> dict[str, Any]:
+    mock_mode = _env_mock_mode() if mock is None else mock
+    if not mock_mode:
+        raise NotImplementedError("Only mock pipeline implementations are available right now.")
+
     run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
     run_dir = RUNS_DIR / run_id
+    artifact_index: list[dict[str, str]] = []
+
+    def write_artifact(filename: str, payload: Any) -> None:
+        path = write_json(run_dir, filename, payload)
+        artifact_index.append(
+            {
+                "name": filename,
+                "path": str(path),
+                "contract": filename,
+            }
+        )
 
     profile = UserProfile(
         goal=profile_input["goal"],
@@ -37,37 +63,44 @@ def run_pipeline(video_path: str | None, profile_input: dict[str, Any]) -> dict[
         known_limitations=profile_input.get("known_limitations", []),
         equipment=profile_input.get("equipment", "unknown"),
     )
-    write_json(run_dir, "user_profile.json", profile)
+    write_artifact("user_profile.json", profile)
 
     manifest = video_qc.run(video_path)
-    write_json(run_dir, "video_manifest.json", manifest)
+    write_artifact("video_manifest.json", manifest)
 
     pose_sequence = pose_landmarker.run(manifest)
     cleaned_pose_sequence = pose_cleaning.run(pose_sequence)
-    write_json(run_dir, "pose_sequence.json", cleaned_pose_sequence)
+    write_artifact("pose_sequence.json", cleaned_pose_sequence)
 
     classification = exercise_classifier.run(cleaned_pose_sequence, profile)
-    write_json(run_dir, "exercise_classification.json", classification)
+    write_artifact("exercise_classification.json", classification)
 
     reps = rep_counter.run(classification, cleaned_pose_sequence)
-    write_json(run_dir, "reps.json", reps)
+    write_artifact("reps.json", reps)
 
     analysis = rep_analysis.run(classification, reps, cleaned_pose_sequence)
-    write_json(run_dir, "rep_analysis.json", analysis)
+    write_artifact("rep_analysis.json", analysis)
 
     variation = variation_detector.run(classification, analysis, profile)
-    write_json(run_dir, "variation.json", variation)
+    write_artifact("variation.json", variation)
 
     issues = issue_marker.run(classification, reps, analysis, variation)
-    write_json(run_dir, "issue_markers.json", issues)
+    write_artifact("issue_markers.json", issues)
 
     annotated_video_path = annotated_renderer.run(manifest, issues, run_dir)
+    artifact_index.append(
+        {
+            "name": "annotated_video_placeholder.json",
+            "path": str(run_dir / "annotated_video_placeholder.json"),
+            "contract": "renderer_placeholder",
+        }
+    )
 
     summary = coach_summary.run(profile, classification, reps, analysis, variation, issues)
-    write_json(run_dir, "coach_summary.json", summary)
+    write_artifact("coach_summary.json", summary)
 
     verification = verifier.run(summary, issues, variation)
-    write_json(run_dir, "verification.json", verification)
+    write_artifact("verification.json", verification)
 
     final_report = {
         "run_id": run_id,
@@ -85,12 +118,19 @@ def run_pipeline(video_path: str | None, profile_input: dict[str, Any]) -> dict[
             "annotated_video_path": annotated_video_path,
         },
     }
-    write_json(run_dir, "final_report.json", final_report)
+    write_artifact("final_report.json", final_report)
+
+    run_manifest = {
+        "run_id": run_id,
+        "mock_mode": mock_mode,
+        "artifacts": artifact_index,
+    }
+    write_json(run_dir, "manifest.json", run_manifest)
 
     return {
         "run_id": run_id,
         "run_dir": str(run_dir),
         "annotated_video_path": annotated_video_path,
+        "manifest_path": str(run_dir / "manifest.json"),
         "final_report": final_report,
     }
-
