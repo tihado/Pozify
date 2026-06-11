@@ -95,6 +95,26 @@ class AnnotatedRendererTests(unittest.TestCase):
         self.assertIsNotNone(output_path)
         self.assertTrue(Path(str(output_path)).exists())
 
+    def test_hdr_metadata_requires_sdr_conversion(self) -> None:
+        self.assertTrue(
+            annotated_renderer._needs_sdr_conversion(
+                {
+                    "color_space": "bt2020nc",
+                    "color_transfer": "arib-std-b67",
+                    "color_primaries": "bt2020",
+                }
+            )
+        )
+        self.assertFalse(
+            annotated_renderer._needs_sdr_conversion(
+                {
+                    "color_space": "bt709",
+                    "color_transfer": "bt709",
+                    "color_primaries": "bt709",
+                }
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
