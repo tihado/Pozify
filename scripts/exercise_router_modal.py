@@ -27,7 +27,7 @@ RICCIO_VIDEO_COLLECTIONS = (
 )
 
 image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.debian_slim(python_version="3.10")
     .apt_install("libegl1", "libgl1", "libgles2", "libglib2.0-0")
     .pip_install(
         "huggingface-hub>=0.24.0",
@@ -35,9 +35,9 @@ image = (
         "mediapipe>=0.10.35",
         "numpy==1.26.4",
         "opencv-python-headless>=4.10.0",
-        "scikit-learn==1.9.0",
-        "scipy==1.17.1",
-        "torch>=2.2.0",
+        "scikit-learn==1.7.2",
+        "scipy==1.15.3",
+        "torch==2.11.0",
     )
     .add_local_dir("src", "/root/src", copy=True)
 )
