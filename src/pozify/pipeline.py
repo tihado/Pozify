@@ -8,10 +8,13 @@ from uuid import uuid4
 
 from pozify.artifacts import write_json
 from pozify.contracts import UserProfile, to_dict
+from pozify.env import env_truthy, load_local_env
 from pozify.exercises import create_exercise_strategy
+from pozify.knowledge_cards import retrieve_cards
 from pozify.steps import (
     annotated_renderer,
     coach_summary,
+    coach_summary_fallback,
     exercise_classifier,
     pose_cleaning,
     pose_landmarker,
@@ -22,6 +25,7 @@ from pozify.steps import (
 
 RUNS_DIR = Path("runs")
 ProgressCallback = Callable[[dict[str, Any]], None]
+BYPASS_VERIFIER_ENV = "POZIFY_COACH_SUMMARY_BYPASS_VERIFIER"
 
 
 def _env_mock_mode(video_path: str | None) -> bool:
@@ -38,9 +42,16 @@ def run_pipeline(
     profile_input: dict[str, Any],
     *,
     mock: bool | None = None,
+    bypass_verifier: bool | None = None,
     progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
+    load_local_env()
     mock_mode = _env_mock_mode(video_path) if mock is None else mock
+    bypass_verifier_enabled = (
+        env_truthy(os.getenv(BYPASS_VERIFIER_ENV))
+        if bypass_verifier is None
+        else bypass_verifier
+    )
 
     run_id = (
         f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
@@ -215,12 +226,60 @@ def run_pipeline(
     if mock_mode:
         mock_steps.insert(0, "exercise_classifier")
 
-    summary = coach_summary.run(
-        profile, classification, reps, analysis, variation, issues
+    summary_cards = retrieve_cards(
+        profile=profile,
+        classification=classification,
+        variation=variation,
+        issues=issues,
     )
+    coach_result = coach_summary.run_with_metadata(
+        profile,
+        classification,
+        reps,
+        analysis,
+        variation,
+        issues,
+        cards=summary_cards,
+    )
+    summary = coach_result.summary
+    verification = verifier.run(
+        summary,
+        issues,
+        variation,
+        classification=classification,
+        analysis=analysis,
+        reps=reps,
+    )
+    coach_summary_source = coach_result.source
+    coach_summary_provider = coach_result.provider
+    coach_summary_model = coach_result.model
+    coach_summary_verifier_bypassed = False
+    if not verification.passed:
+        if bypass_verifier_enabled and coach_result.source == "model_or_local":
+            coach_summary_verifier_bypassed = True
+        else:
+            summary = coach_summary_fallback.build_fallback_summary(
+                profile=profile,
+                classification=classification,
+                reps=reps,
+                analysis=analysis,
+                variation=variation,
+                issues=issues,
+                cards=summary_cards,
+                failure_reason="; ".join(verification.notes) or "verification_failed",
+            )
+            coach_summary_source = "fallback_after_verification"
+            coach_summary_provider = coach_result.provider
+            coach_summary_model = coach_result.model
+            verification = verifier.run(
+                summary,
+                issues,
+                variation,
+                classification=classification,
+                analysis=analysis,
+                reps=reps,
+            )
     write_artifact("coach_summary.json", summary)
-
-    verification = verifier.run(summary, issues, variation)
     write_artifact("verification.json", verification)
     emit(
         "coach",
@@ -249,6 +308,11 @@ def run_pipeline(
             "analysis_mode": analysis_mode,
             "pose_source": pose_source,
             "mock_steps": mock_steps,
+            "coach_summary_source": coach_summary_source,
+            "coach_summary_provider": coach_summary_provider,
+            "coach_summary_model": coach_summary_model,
+            "coach_summary_verifier_bypassed": coach_summary_verifier_bypassed,
+            "coach_summary_verifier_bypass_requested": bypass_verifier_enabled,
         },
     }
     write_artifact("final_report.json", final_report)

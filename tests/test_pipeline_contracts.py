@@ -14,8 +14,9 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify import pipeline
-from pozify.contracts import ContractValidationError, UserProfile, validate_contract
+from pozify.contracts import CoachSummary, ContractValidationError, UserProfile, Verification, validate_contract
 from pozify.exercise_catalog import USER_SELECTABLE_EXERCISES
+from pozify.steps.coach_summary import CoachSummaryResult
 
 
 PROFILE_INPUT = {
@@ -83,12 +84,13 @@ EXPECTED_ARTIFACT_KEYS = {
     "issue_markers.json": ["issues"],
     "coach_summary.json": [
         "confidence_notes",
-        "main_findings",
         "next_session_plan",
         "summary",
         "top_fixes",
-        "variation_explanation",
-        "what_went_well",
+        "valid_variation_vs_issue",
+        "what_changed_across_reps",
+        "what_looked_good",
+        "what_you_did",
     ],
     "verification.json": ["checks", "notes", "passed"],
     "final_report.json": [
@@ -244,6 +246,62 @@ class PipelineContractTests(unittest.TestCase):
         self.assertEqual(payload_by_step["reps"]["rep_count"], 0)
         self.assertEqual(payload_by_step["issues"]["issue_count"], 0)
         self.assertIn("annotated_video_path", payload_by_step["render"])
+
+    def test_pipeline_can_bypass_verifier_and_keep_model_summary(self) -> None:
+        model_summary = CoachSummary(
+            summary="Model summary kept.",
+            what_you_did=["You completed 1 `squat` rep."],
+            what_looked_good=["The setup looked steady."],
+            what_changed_across_reps=["Not enough reps for a trend."],
+            valid_variation_vs_issue=["The detected variation was `wide_squat_stance`."],
+            top_fixes=["Sit slightly deeper before standing up."],
+            next_session_plan=["Repeat the set with the same camera angle."],
+            confidence_notes=["Confidence is limited."],
+        )
+        with (
+            patch.dict(os.environ, {"POZIFY_COACH_SUMMARY_BYPASS_VERIFIER": "1"}),
+            patch(
+                "pozify.pipeline.coach_summary.run_with_metadata",
+                return_value=CoachSummaryResult(
+                    summary=model_summary,
+                    provider="hf_inference",
+                    model="Qwen/Qwen2.5-7B-Instruct",
+                    source="model_or_local",
+                ),
+            ),
+            patch(
+                "pozify.pipeline.verifier.run",
+                return_value=Verification(
+                    passed=False,
+                    checks={
+                        "no_issue_outside_json": True,
+                        "variation_not_overcorrected": False,
+                        "no_diagnosis": True,
+                        "no_injury_prevention_claim": True,
+                        "confidence_notes_present_when_required": True,
+                    },
+                    notes=["Synthetic verifier failure."],
+                ),
+            ),
+        ):
+            result = pipeline.run_pipeline(
+                video_path=None, profile_input=PROFILE_INPUT, mock=True
+            )
+
+        self._assert_pipeline_artifacts(result)
+        report = result["final_report"]
+        self.assertEqual(report["coach_summary"]["summary"], "Model summary kept.")
+        self.assertEqual(report["artifacts"]["coach_summary_source"], "model_or_local")
+        self.assertEqual(report["artifacts"]["coach_summary_provider"], "hf_inference")
+        self.assertEqual(
+            report["artifacts"]["coach_summary_model"],
+            "Qwen/Qwen2.5-7B-Instruct",
+        )
+        self.assertTrue(report["artifacts"]["coach_summary_verifier_bypassed"])
+        self.assertFalse(report["verification"]["passed"])
+        self.assertTrue(
+            report["artifacts"]["coach_summary_verifier_bypass_requested"]
+        )
 
     def test_contract_validation_rejects_missing_required_field(self) -> None:
         payload = {
