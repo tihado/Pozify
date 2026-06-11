@@ -226,6 +226,12 @@ def _analysis_response(result: dict[str, Any]) -> dict[str, Any]:
         "annotated_video_url": _artifact_url(
             result["run_id"], result["annotated_video_path"]
         ),
+        "annotated_video_status": result["final_report"]["artifacts"].get(
+            "annotated_video_status"
+        ),
+        "annotated_video_reason": result["final_report"]["artifacts"].get(
+            "annotated_video_reason"
+        ),
         "issue_thumbnail_urls": issue_thumbnail_urls,
         "issue_clip_urls": issue_clip_urls,
         "artifact_urls": _artifact_urls(result),

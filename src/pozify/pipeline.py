@@ -195,11 +195,13 @@ def run_pipeline(
         "done",
         (
             "Your annotated video is ready."
-            if render_artifacts.annotated_video_path
+            if render_artifacts.status == "ok"
             else "I could not render an annotated video, but the report is ready."
         ),
         annotated_video_path=render_artifacts.annotated_video_path,
         issue_clip_count=len(render_artifacts.issue_clip_paths),
+        annotated_video_status=render_artifacts.status,
+        annotated_video_reason=render_artifacts.reason,
     )
 
     emit(
@@ -265,6 +267,8 @@ def run_pipeline(
         "artifacts": {
             "run_dir": str(run_dir),
             "annotated_video_path": render_artifacts.annotated_video_path,
+            "annotated_video_status": render_artifacts.status,
+            "annotated_video_reason": render_artifacts.reason,
             "issue_thumbnail_paths": render_artifacts.issue_thumbnail_paths,
             "issue_clip_paths": render_artifacts.issue_clip_paths,
             "rep_debug_path": str(run_dir / "rep_debug.json"),

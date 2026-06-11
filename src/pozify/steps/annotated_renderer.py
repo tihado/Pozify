@@ -51,6 +51,8 @@ class RenderArtifacts:
     annotated_video_path: str | None
     issue_thumbnail_paths: list[dict[str, Any]]
     issue_clip_paths: list[dict[str, Any]]
+    status: str
+    reason: str | None = None
 
 
 def _tool_path(name: str) -> str | None:
@@ -619,9 +621,11 @@ def run(
 ) -> RenderArtifacts:
     if not manifest.analysis_allowed or not manifest.video_path:
         return RenderArtifacts(
-            annotated_video_path=manifest.video_path,
+            annotated_video_path=None,
             issue_thumbnail_paths=[],
             issue_clip_paths=[],
+            status="skipped",
+            reason="analysis_not_allowed_or_video_missing",
         )
 
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -641,9 +645,11 @@ def run(
         for temporary_path in temporary_paths:
             temporary_path.unlink(missing_ok=True)
         return RenderArtifacts(
-            annotated_video_path=manifest.video_path,
+            annotated_video_path=None,
             issue_thumbnail_paths=[],
             issue_clip_paths=[],
+            status="source_decode_failed",
+            reason="renderer_could_not_open_video",
         )
 
     fps = manifest.fps if manifest.fps > 0 else 30.0
@@ -652,9 +658,11 @@ def run(
     if width <= 0 or height <= 0:
         capture.release()
         return RenderArtifacts(
-            annotated_video_path=manifest.video_path,
+            annotated_video_path=None,
             issue_thumbnail_paths=[],
             issue_clip_paths=[],
+            status="invalid_dimensions",
+            reason="renderer_could_not_resolve_frame_size",
         )
 
     output_path = run_dir / "annotated_video.mp4"
@@ -665,9 +673,11 @@ def run(
         for temporary_path in temporary_paths:
             temporary_path.unlink(missing_ok=True)
         return RenderArtifacts(
-            annotated_video_path=manifest.video_path,
+            annotated_video_path=None,
             issue_thumbnail_paths=[],
             issue_clip_paths=[],
+            status="writer_unavailable",
+            reason="renderer_could_not_open_video_writer",
         )
 
     pose_by_frame = {frame.frame_index: frame for frame in pose_sequence.frames}
@@ -741,4 +751,5 @@ def run(
             width,
             height,
         ),
+        status="ok",
     )

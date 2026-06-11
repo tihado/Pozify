@@ -62,6 +62,31 @@ function percent(value) {
   return typeof value === "number" ? `${Math.round(value * 100)}%` : "n/a";
 }
 
+function renderStatusLabel(status) {
+  const labels = {
+    ok: "Annotated video ready",
+    skipped: "Annotated render skipped",
+    source_decode_failed: "Could not decode video for rendering",
+    invalid_dimensions: "Could not read video dimensions",
+    writer_unavailable: "Could not open video encoder",
+  };
+  return labels[status] || "Annotated render unavailable";
+}
+
+function renderReasonLabel(reason) {
+  const labels = {
+    analysis_not_allowed_or_video_missing:
+      "The pipeline skipped video rendering because the upload could not be analyzed safely.",
+    renderer_could_not_open_video:
+      "The renderer could not reopen the processed video stream after pose extraction.",
+    renderer_could_not_resolve_frame_size:
+      "The renderer could not determine a valid frame size for the output video.",
+    renderer_could_not_open_video_writer:
+      "The renderer could not create the output video file with an available codec.",
+  };
+  return labels[reason] || "No additional renderer details were captured.";
+}
+
 const runningProgressSteps = [
   {
     id: "quality",
@@ -306,12 +331,14 @@ function SummaryTab({ result }) {
   const summary = report.coach_summary;
   const warnings = report.video_manifest.quality_warnings || [];
   const issues = report.issue_markers?.issues || [];
+  const renderStatus = report.artifacts?.annotated_video_status;
   const stats = [
     ["Exercise", report.exercise.exercise],
     ["Confidence", percent(report.exercise.confidence)],
     ["Variation", report.variation.detected_variation],
     ["Reps", String(report.reps.reps.length)],
     ["Issues", String(issues.length)],
+    ["Render", label(renderStatus || "unknown")],
   ];
 
   return h(
@@ -578,6 +605,9 @@ function issueClipText(result, issue, index) {
 
 function IssuesTab({ result }) {
   const issues = result?.report?.issue_markers?.issues || [];
+  const renderStatus = result?.report?.artifacts?.annotated_video_status;
+  const renderReason = result?.report?.artifacts?.annotated_video_reason;
+  const mediaUnavailable = issues.length && renderStatus && renderStatus !== "ok";
   return h(
     "section",
     { className: "summary", "aria-label": "Issue timeline" },
@@ -593,6 +623,15 @@ function IssuesTab({ result }) {
           : "clear",
       ),
     ),
+    mediaUnavailable
+      ? h(
+          "article",
+          { className: "note full-note" },
+          h("h3", null, "Issue media unavailable"),
+          h("p", null, renderStatusLabel(renderStatus)),
+          h("p", null, renderReasonLabel(renderReason)),
+        )
+      : null,
     issues.length
       ? h(
           "div",
@@ -1029,9 +1068,24 @@ function App() {
                 "div",
                 { className: "result-empty" },
                 h("strong", null, "Awaiting scan"),
-                h("span", null, "The annotated video appears after analysis."),
+                h(
+                  "span",
+                  null,
+                  result?.annotated_video_status && result.annotated_video_status !== "ok"
+                    ? renderReasonLabel(result.annotated_video_reason)
+                    : "The annotated video appears after analysis.",
+                ),
               ),
         ),
+        result?.annotated_video_status && result.annotated_video_status !== "ok"
+          ? h(
+              "article",
+              { className: "note full-note" },
+              h("h3", null, "Annotated video unavailable"),
+              h("p", null, renderStatusLabel(result.annotated_video_status)),
+              h("p", null, renderReasonLabel(result.annotated_video_reason)),
+            )
+          : null,
         result?.annotated_video_url
           ? null
           : h(ProgressPanel, { steps: progressSteps }),
