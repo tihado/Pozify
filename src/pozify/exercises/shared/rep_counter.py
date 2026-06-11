@@ -117,17 +117,19 @@ def partial_reps(
 
 class ExerciseRepCounter(ABC):
     exercise: str
+    pose_sequence: PoseSequence
     min_cycle_frames = MIN_CYCLE_FRAMES
     min_phase_frames = MIN_PHASE_FRAMES
     min_signal_range = MIN_SIGNAL_RANGE
     min_usable_signal_samples = MIN_USABLE_SIGNAL_SAMPLES
 
     @abstractmethod
-    def build_signal(self, sequence: PoseSequence) -> tuple[list[SignalSample], dict[str, Any]]:
+    def build_signal(self) -> tuple[list[SignalSample], dict[str, Any]]:
         """Build the exercise-specific normalized motion signal."""
 
-    def count(self, sequence: PoseSequence) -> tuple[Reps, dict[str, Any]]:
-        samples, debug = self.build_signal(sequence)
+    def count(self) -> tuple[Reps, dict[str, Any]]:
+        sequence = self.pose_sequence
+        samples, debug = self.build_signal()
         signal_range = debug["raw_signal_range"]
         extrema = find_local_extrema(samples)
         min_amplitude = max(self.min_signal_range, signal_range * 0.35)
@@ -177,4 +179,3 @@ class ExerciseRepCounter(ABC):
             ],
         }
         return reps, debug_payload
-
