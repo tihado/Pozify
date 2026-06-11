@@ -12,7 +12,7 @@ from pozify.contracts import (
     RepAnalysisItem,
     Reps,
 )
-from pozify.steps.exercise_analyzers import analyzer_for
+from pozify.exercises import get_exercise_strategy
 from pozify.steps.exercise_analyzers.base import (
     mean_optional,
     round_optional,
@@ -192,13 +192,13 @@ def run(
     reps: Reps,
     sequence: PoseSequence,
 ) -> RepAnalysis:
-    analyzer = analyzer_for(classification.exercise)
+    exercise = get_exercise_strategy(classification.exercise)
     draft_items: list[tuple[Rep, dict[str, Any], float, float, float, list[str]]] = []
     for rep in reps.reps:
         frames = _frames_for_rep(sequence, rep)
         primary_signal = _primary_signal(classification.exercise, frames)
         common_metrics = _common_metrics(rep, frames, primary_signal)
-        exercise_metrics, rom_score, stability_score, symmetry_score, hints = analyzer.metrics(frames)
+        exercise_metrics, rom_score, stability_score, symmetry_score, hints = exercise.metrics(frames)
         metrics = {**common_metrics, **exercise_metrics}
         draft_items.append((rep, metrics, rom_score, stability_score, symmetry_score, hints))
 

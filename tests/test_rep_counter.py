@@ -8,11 +8,11 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify.contracts import ExerciseClassification, PoseFrame, PoseSequence
+from pozify.exercises import get_exercise_strategy
+from pozify.exercises.push_up import PushUpExercise
+from pozify.exercises.shoulder_press import ShoulderPressExercise
+from pozify.exercises.squat import SquatExercise
 from pozify.steps import rep_counter
-from pozify.steps.rep_counters import get_rep_counter
-from pozify.steps.rep_counters.push_up import PushUpRepCounter
-from pozify.steps.rep_counters.shoulder_press import ShoulderPressRepCounter
-from pozify.steps.rep_counters.squat import SquatRepCounter
 
 
 def _frame(frame_index: int, landmarks: dict[str, dict[str, float]]) -> PoseFrame:
@@ -149,10 +149,10 @@ class RepCounterTests(unittest.TestCase):
         self.assertEqual(reps.partial_reps, [{"reason": "unknown_exercise"}])
         self.assertEqual(debug["selected_signal"], "none")
 
-    def test_exercises_resolve_to_specific_rep_counter_strategies(self) -> None:
-        self.assertIsInstance(get_rep_counter("push_up"), PushUpRepCounter)
-        self.assertIsInstance(get_rep_counter("shoulder_press"), ShoulderPressRepCounter)
-        self.assertIsInstance(get_rep_counter("squat"), SquatRepCounter)
+    def test_exercises_resolve_to_specific_strategies(self) -> None:
+        self.assertIsInstance(get_exercise_strategy("push_up"), PushUpExercise)
+        self.assertIsInstance(get_exercise_strategy("shoulder_press"), ShoulderPressExercise)
+        self.assertIsInstance(get_exercise_strategy("squat"), SquatExercise)
 
 
 if __name__ == "__main__":
