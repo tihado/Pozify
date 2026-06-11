@@ -8,12 +8,12 @@ each video into the same 30-frame pose-window features used at inference time.
 
 Use these router labels:
 
-| Router label | Folder names accepted by the normalizer | Notes |
-| --- | --- | --- |
-| `squat` | `squat` | Supported exercise class |
-| `push_up` | `push-up`, `push_up`, `pushup` | Supported exercise class |
-| `shoulder_press` | `shoulder press`, `shoulder_press`, `overhead press` | Supported exercise class |
-| `unknown` | `unknown`, unsupported exercise folders, setup/idle/stretching clips | Rejection class |
+| Router label     | Folder names accepted by the normalizer                              | Notes                    |
+| ---------------- | -------------------------------------------------------------------- | ------------------------ |
+| `squat`          | `squat`                                                              | Supported exercise class |
+| `push_up`        | `push-up`, `push_up`, `pushup`                                       | Supported exercise class |
+| `shoulder_press` | `shoulder press`, `shoulder_press`, `overhead press`                 | Supported exercise class |
+| `unknown`        | `unknown`, unsupported exercise folders, setup/idle/stretching clips | Rejection class          |
 
 Unsupported exercises from the Riccio dataset, such as `barbell biceps curl` and `hammer curl`, are
 mapped to `unknown`. Use the same convention for custom negative examples.
@@ -56,16 +56,16 @@ Useful `unknown` clips include:
 
 ## Capture Protocol
 
-| Setting | Recommendation |
-| --- | --- |
-| Clip length | 5-15 seconds for router clips; 10-30 seconds if also used for rep-count evaluation |
-| Frame rate | 24-30 FPS preferred; minimum 15 FPS |
-| Resolution | 720p or better preferred; minimum 480x360 |
-| Camera | Static phone or webcam, no panning |
-| Framing | Full body visible for squats/presses; upper body and hips visible for push-ups |
-| View angle | Side or 30-45 degree angle for squats/push-ups; front or slight-front angle for presses |
-| Lighting | Even lighting; avoid strong backlight and heavy shadows |
-| Reps | 3-8 clean reps per supported clip when possible |
+| Setting     | Recommendation                                                                          |
+| ----------- | --------------------------------------------------------------------------------------- |
+| Clip length | 5-15 seconds for router clips; 10-30 seconds if also used for rep-count evaluation      |
+| Frame rate  | 24-30 FPS preferred; minimum 15 FPS                                                     |
+| Resolution  | 720p or better preferred; minimum 480x360                                               |
+| Camera      | Static phone or webcam, no panning                                                      |
+| Framing     | Full body visible for squats/presses; upper body and hips visible for push-ups          |
+| View angle  | Side or 30-45 degree angle for squats/push-ups; front or slight-front angle for presses |
+| Lighting    | Even lighting; avoid strong backlight and heavy shadows                                 |
+| Reps        | 3-8 clean reps per supported clip when possible                                         |
 
 Keep one athlete and one exercise per clip. Avoid transitions between exercises inside a single clip.
 

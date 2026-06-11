@@ -210,7 +210,7 @@ Example:
   "frame_index": 120,
   "timestamp_sec": 4.0,
   "landmarks": {
-    "left_shoulder": {"x": 0.43, "y": 0.32, "z": -0.03, "visibility": 0.99}
+    "left_shoulder": { "x": 0.43, "y": 0.32, "z": -0.03, "visibility": 0.99 }
   },
   "world_landmarks": {},
   "pose_quality": {
@@ -231,7 +231,7 @@ Example:
   "exercise": "push_up",
   "confidence": 0.92,
   "window_predictions": [
-    {"start_sec": 0.0, "end_sec": 1.0, "label": "push_up", "confidence": 0.91}
+    { "start_sec": 0.0, "end_sec": 1.0, "label": "push_up", "confidence": 0.91 }
   ],
   "fallback_required": false
 }

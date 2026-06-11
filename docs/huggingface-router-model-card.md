@@ -74,10 +74,10 @@ The latest training report is included as `training_report.md`.
 
 Summary:
 
-| Model | Artifact | Accuracy | Unknown rejection rate |
-| --- | --- | ---: | ---: |
-| Baseline | `baseline.joblib` | 0.9987 | 0.9984 |
-| BiLSTM temporal | `temporal.pt` | 0.9964 | 0.9984 |
+| Model           | Artifact          | Accuracy | Unknown rejection rate |
+| --------------- | ----------------- | -------: | ---------------------: |
+| Baseline        | `baseline.joblib` |   0.9987 |                 0.9984 |
+| BiLSTM temporal | `temporal.pt`     |   0.9964 |                 0.9984 |
 
 ## Limitations
 
