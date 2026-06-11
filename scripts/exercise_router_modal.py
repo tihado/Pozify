@@ -31,6 +31,7 @@ RICCIO_VIDEO_COLLECTIONS = (
     "my_test_video_1",
 )
 HF_ARTIFACT_FILENAMES = (
+    "baseline.joblib",
     "router.joblib",
     "router_selection.json",
     "temporal.pt",
@@ -696,8 +697,8 @@ def evaluate() -> dict[str, Any]:
         return result
 
     selected = select_router_candidate(candidates)
-    if selected["selected_artifact"] == "router.joblib":
-        shutil.copyfile(selected["source_artifact"], MODEL_ROOT / "router.joblib")
+    if baseline_path.exists():
+        shutil.copyfile(baseline_path, MODEL_ROOT / "router.joblib")
     selection = {
         "selected_model": f"{selected['name']}.{ 'joblib' if selected['name'] == 'baseline' else 'pt' }",
         "selected_artifact": selected["selected_artifact"],
