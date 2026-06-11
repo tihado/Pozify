@@ -51,10 +51,12 @@ function Summary({ result }) {
   const report = result.report;
   const summary = report.coach_summary;
   const warnings = report.video_manifest.quality_warnings || [];
+  const issues = report.issue_markers?.issues || [];
   const stats = [
     ["Exercise", report.exercise.exercise],
     ["Variation", report.variation.detected_variation],
     ["Reps", String(report.reps.reps.length)],
+    ["Issues", String(issues.length)],
     ["Mode", report.artifacts.analysis_mode],
   ];
 
@@ -77,6 +79,7 @@ function Summary({ result }) {
       h(NoteList, { title: "Top fixes", items: summary.top_fixes }),
       h(NoteList, { title: "Next session", items: summary.next_session_plan }),
     ),
+    h(IssueTimeline, { issues }),
     warnings.length
       ? h(
           "div",
@@ -84,6 +87,54 @@ function Summary({ result }) {
           warnings.map((warning) => h("span", { key: warning }, label(warning))),
         )
       : h("div", { className: "quality-list" }, h("span", null, "No quality warnings")),
+  );
+}
+
+function issueEvidence(issue) {
+  const entries = Object.entries(issue.evidence || {}).filter(
+    ([key, value]) =>
+      !["threshold", "confidence", "variation_context", "supporting_frames", "fallback"].includes(key) &&
+      typeof value !== "object",
+  );
+  const [metric, value] = entries[0] || ["metric", "n/a"];
+  return `${label(metric)} ${value} vs ${issue.evidence?.threshold ?? "n/a"}`;
+}
+
+function IssueTimeline({ issues }) {
+  return h(
+    "section",
+    { className: "issue-timeline", "aria-label": "Issue timeline" },
+    h(
+      "div",
+      { className: "timeline-head" },
+      h("h3", null, "Issue timeline"),
+      h("span", null, issues.length ? `${issues.length} interval${issues.length === 1 ? "" : "s"}` : "clear"),
+    ),
+    issues.length
+      ? h(
+          "div",
+          { className: "timeline-list" },
+          issues.map((issue, index) =>
+            h(
+              "article",
+              { className: "timeline-item", key: `${issue.rep_id}-${issue.issue}-${index}` },
+              h(
+                "div",
+                { className: "timeline-main" },
+                h("strong", null, label(issue.issue)),
+                h("span", null, `Rep ${issue.rep_id} · ${issue.start_sec.toFixed(2)}s-${issue.end_sec.toFixed(2)}s`),
+              ),
+              h(
+                "div",
+                { className: "timeline-meta" },
+                h("span", null, `severity ${Math.round(issue.severity * 100)}%`),
+                h("span", null, issueEvidence(issue)),
+                h("span", null, issue.affected_joints.map(label).join(", ")),
+              ),
+            ),
+          ),
+        )
+      : h("p", null, "No sustained threshold violations were found."),
   );
 }
 

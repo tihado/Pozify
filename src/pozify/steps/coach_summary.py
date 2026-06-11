@@ -22,29 +22,29 @@ def run(
     issue_labels = [issue.issue for issue in issues.issues]
     main_issue = issue_labels[0] if issue_labels else "no_major_issue"
     issue_text = (
-        f"The current mock issue placeholder is `{main_issue}`, mostly appearing in later reps."
+        f"The strongest frame-level marker is `{main_issue}`, with timestamps and metric evidence in the issue timeline."
         if issues.issues
-        else "The current mock issue layer did not emit a major issue."
+        else "The frame-level issue rules did not find a sustained threshold violation."
     )
 
     return CoachSummary(
         summary=(
             f"The pipeline segmented {len(reps.reps)} {classification.exercise} reps from the current pose stream. "
-            f"Exercise routing, variation labeling, issue labeling, and coaching language still use mock placeholders. "
-            f"The current placeholder variation is `{variation.detected_variation}`. {issue_text}"
+            f"Exercise routing, variation labeling, and coaching language may still use lightweight rules or placeholders. "
+            f"The detected variation is `{variation.detected_variation}`. {issue_text}"
         ),
         what_went_well=[
             f"Current placeholder ROM score is {analysis.aggregate_metrics['avg_rom_score']}.",
             f"Current placeholder symmetry score is {analysis.aggregate_metrics['avg_symmetry_score']}.",
         ],
         main_findings=[
-            f"Mock issue placeholder `{main_issue}` appears in {len(issues.issues)} rep(s)."
+            f"Frame-level marker `{main_issue}` appears in {len(issues.issues)} interval(s)."
             if issues.issues
-            else "No mock issue placeholder detected."
+            else "No sustained issue interval detected."
         ],
         variation_explanation=(
-            f"`{variation.detected_variation}` is currently a placeholder variation label. "
-            f"It should not be treated as a verified movement diagnosis yet."
+            f"`{variation.detected_variation}` was included as context for interpreting issue markers. "
+            f"It should be reviewed alongside camera angle and pose confidence."
         ),
         top_fixes=[
             "Keep the same setup and record from a stable camera angle.",

@@ -8,16 +8,13 @@ from uuid import uuid4
 
 from pozify.artifacts import write_json
 from pozify.contracts import UserProfile, to_dict
+from pozify.exercises import create_exercise_strategy
 from pozify.steps import (
     annotated_renderer,
     coach_summary,
     exercise_classifier,
-    issue_marker,
     pose_cleaning,
     pose_landmarker,
-    rep_analysis,
-    rep_counter,
-    variation_detector,
     verifier,
     video_qc,
 )
@@ -26,8 +23,12 @@ from pozify.steps import (
 RUNS_DIR = Path("runs")
 
 
-def _env_mock_mode() -> bool:
-    value = os.getenv("POZIFY_MOCK_MODE", "1").strip().lower()
+def _env_mock_mode(video_path: str | None) -> bool:
+    configured = os.getenv("POZIFY_MOCK_MODE")
+    if configured is None:
+        return video_path is None
+
+    value = configured.strip().lower()
     return value not in {"0", "false", "no", "off"}
 
 
@@ -37,7 +38,7 @@ def run_pipeline(
     *,
     mock: bool | None = None,
 ) -> dict[str, Any]:
-    mock_mode = _env_mock_mode() if mock is None else mock
+    mock_mode = _env_mock_mode(video_path) if mock is None else mock
 
     run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
     run_dir = RUNS_DIR / run_id
@@ -73,17 +74,24 @@ def run_pipeline(
     classification = exercise_classifier.run(cleaned_pose_sequence, profile, mock=mock_mode)
     write_artifact("exercise_classification.json", classification)
 
-    reps, rep_debug = rep_counter.run(classification, cleaned_pose_sequence)
+    exercise = create_exercise_strategy(
+        classification.exercise,
+        video_manifest=manifest,
+        pose_sequence=cleaned_pose_sequence,
+        profile=profile,
+    )
+
+    reps, rep_debug = exercise.count()
     write_artifact("reps.json", reps)
     write_artifact("rep_debug.json", rep_debug)
 
-    analysis = rep_analysis.run(classification, reps, cleaned_pose_sequence)
+    analysis = exercise.analyze_reps(reps)
     write_artifact("rep_analysis.json", analysis)
 
-    variation = variation_detector.run(classification, analysis, profile)
+    variation = exercise.resolve_variation(analysis)
     write_artifact("variation.json", variation)
 
-    issues = issue_marker.run(classification, reps, analysis, variation)
+    issues = exercise.mark_issues(reps, analysis, variation)
     write_artifact("issue_markers.json", issues)
 
     annotated_video_path = annotated_renderer.run(manifest, cleaned_pose_sequence, reps, issues, run_dir)
@@ -95,9 +103,6 @@ def run_pipeline(
     )
     analysis_mode = "mock" if mock_mode else "real"
     mock_steps = [
-        "rep_analysis",
-        "variation_detector",
-        "issue_marker",
         "coach_summary",
         "verifier",
     ]

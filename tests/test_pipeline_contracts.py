@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -226,6 +228,11 @@ class PipelineContractTests(unittest.TestCase):
 
                 report = result["final_report"]
                 self.assertEqual(report["exercise"]["exercise"], exercise)
+
+    def test_mock_mode_defaults_to_real_when_video_path_is_present(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(pipeline._env_mock_mode("sample.mp4"))
+            self.assertTrue(pipeline._env_mock_mode(None))
 
 
 if __name__ == "__main__":
