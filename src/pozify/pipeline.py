@@ -95,8 +95,6 @@ def run_pipeline(
     )
     analysis_mode = "mock" if mock_mode else "real"
     mock_steps = [
-        "rep_analysis",
-        "variation_detector",
         "issue_marker",
         "coach_summary",
         "verifier",
