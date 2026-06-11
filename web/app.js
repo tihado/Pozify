@@ -66,27 +66,27 @@ function percent(value) {
 const runningProgressSteps = [
   {
     id: "quality",
-    text: "Tôi đang kiểm tra chất lượng video của bạn.",
+    text: "First up, I am checking if the video is clear enough to coach from.",
     delayMs: 0,
   },
   {
     id: "pose",
-    text: "Tôi đang tiến hành phân tích dáng tập của bạn.",
+    text: "Now I am mapping your posture and tracking the key body landmarks.",
     delayMs: 900,
   },
   {
     id: "exercise",
-    text: "Tôi đang nhận diện bài tập bạn đang thực hiện.",
+    text: "Let me figure out which exercise you are doing.",
     delayMs: 1800,
   },
   {
     id: "reps",
-    text: "Tôi đang đếm số reps trong video.",
+    text: "Counting your reps now. One clean rep at a time.",
     delayMs: 2800,
   },
   {
     id: "issues",
-    text: "Tôi đang phân tích các lỗi sai trong khi tập của bạn.",
+    text: "Almost there. I am checking the moments that may need a small fix.",
     delayMs: 3900,
   },
 ];
@@ -111,30 +111,30 @@ function finalProgressState(result) {
       id: "quality",
       status: "done",
       text: warnings.length
-        ? `Video có một vài điểm cần lưu ý: ${warnings.map(label).join(", ")}.`
-        : "Ồ, video của bạn có chất lượng quay tốt đó.",
+        ? `Quick note: the video has a few things to watch, like ${warnings.map(label).join(", ")}.`
+        : "Nice, your video quality looks solid.",
     },
     {
       id: "pose",
       status: "done",
-      text: "Tôi đã phân tích xong dáng tập và các điểm landmark chính.",
+      text: "Posture tracking is done. I found the key landmarks I need.",
     },
     {
       id: "exercise",
       status: "done",
-      text: `Chúng tôi nhận thấy bạn đang thực hiện ${exercise}.`,
+      text: `Looks like you are doing ${exercise}.`,
     },
     {
       id: "reps",
       status: "done",
-      text: `Tôi đếm được bạn đã thực hiện ${repCount} reps ${exercise}.`,
+      text: `I counted ${repCount} ${exercise} reps in this set.`,
     },
     {
       id: "issues",
       status: "done",
       text: issues.length
-        ? `Tôi tìm thấy ${issues.length} điểm cần chú ý trong khi tập của bạn.`
-        : "Tôi không thấy lỗi kỹ thuật rõ ràng trong bài tập này.",
+        ? `I found ${issues.length} coaching point${issues.length === 1 ? "" : "s"} worth reviewing.`
+        : "Good news, I did not spot any clear form issues in this set.",
     },
   ];
 }
@@ -144,7 +144,7 @@ function ProgressPanel({ steps }) {
   return h(
     "section",
     { className: "progress-panel", "aria-live": "polite" },
-    h("h3", null, "Analysis progress"),
+    h("h3", null, "Your scan is moving"),
     h(
       "ol",
       { className: "progress-list" },
@@ -731,7 +731,7 @@ function App() {
         {
           id: "error",
           status: "active",
-          text: "Phân tích chưa hoàn tất. Vui lòng thử lại với video khác hoặc kiểm tra kết nối.",
+          text: "The scan did not finish. Try another video or check the connection, and we can run it again.",
         },
       ]);
       setStatus("idle");
