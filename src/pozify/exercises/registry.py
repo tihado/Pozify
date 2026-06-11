@@ -7,13 +7,14 @@ from pozify.exercises.squat import SquatExercise
 from pozify.exercises.unknown import UnknownExercise
 
 
-EXERCISES: dict[str, ExerciseStrategy] = {
-    "push_up": PushUpExercise(),
-    "shoulder_press": ShoulderPressExercise(),
-    "squat": SquatExercise(),
-    "unknown": UnknownExercise(),
+EXERCISE_CLASSES: dict[str, type[ExerciseStrategy]] = {
+    "push_up": PushUpExercise,
+    "shoulder_press": ShoulderPressExercise,
+    "squat": SquatExercise,
+    "unknown": UnknownExercise,
 }
 
 
-def get_exercise_strategy(exercise: str) -> ExerciseStrategy:
-    return EXERCISES.get(exercise, EXERCISES["unknown"])
+def create_exercise_strategy(exercise: str) -> ExerciseStrategy:
+    exercise_class = EXERCISE_CLASSES.get(exercise, UnknownExercise)
+    return exercise_class()

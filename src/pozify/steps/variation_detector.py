@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from pozify.contracts import ExerciseClassification, RepAnalysis, UserProfile, Variation
-from pozify.exercises import get_exercise_strategy
+from pozify.contracts import RepAnalysis, UserProfile, Variation
+from pozify.exercises import ExerciseStrategy
 
 
 def run(
-    classification: ExerciseClassification,
+    exercise: ExerciseStrategy,
     analysis: RepAnalysis,
     profile: UserProfile,
 ) -> Variation:
-    exercise = get_exercise_strategy(classification.exercise)
     if profile.intended_variation:
         variation = profile.intended_variation
         confidence = 0.95
@@ -23,7 +22,7 @@ def run(
         not_issues.append("low_pose_confidence_limits_variation_call")
 
     return Variation(
-        exercise=classification.exercise,
+        exercise=exercise.exercise,
         detected_variation=variation,
         variation_confidence=confidence,
         not_issues=sorted(set(not_issues)),

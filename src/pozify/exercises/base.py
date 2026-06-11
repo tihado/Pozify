@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pozify.contracts import PoseFrame, RepAnalysis
-from pozify.steps.exercise_analyzers.base import ExerciseMetricResult
+from pozify.exercises.shared.analyzer import ExerciseMetricResult
+from pozify.exercises.shared.issue_marker import IssueRule
 from pozify.steps.rep_counters.base import ExerciseRepCounter
 
 
@@ -14,6 +15,9 @@ class ExerciseStrategy(ExerciseRepCounter):
 
     def profile_not_issues(self, variation: str) -> list[str]:
         return []
+
+    def issue_rules(self) -> tuple[IssueRule, ...]:
+        return ()
 
     def metric(self, analysis: RepAnalysis, name: str) -> float | None:
         value = analysis.aggregate_metrics.get(name)
