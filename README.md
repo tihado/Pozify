@@ -21,7 +21,7 @@ tags:
 
 Pozify is a Gradio + uv base project for a video-based workout form review app.
 
-The current implementation contains the full application pipeline, step inputs/outputs, and JSON data contracts. The model and computer-vision steps are intentionally mocked so the team can replace each step with real implementations without changing the pipeline interface.
+The current implementation contains the full application pipeline, step inputs/outputs, and JSON data contracts. Uploaded videos use real video QC, MediaPipe pose extraction, and real rep segmentation by default; no-video/demo runs still use mock pose data.
 
 ## Run The App
 
@@ -37,15 +37,15 @@ uv run gradio app.py
 
 The app runs at `http://127.0.0.1:7860` by default.
 
-The pipeline runs in mock mode by default. To be explicit in scripts, call
-`run_pipeline(..., mock=True)` or set:
+The pipeline runs with real pose extraction by default when a video path is provided. No-video runs
+default to mock mode. To force mock mode in scripts, call `run_pipeline(..., mock=True)` or set:
 
 ```bash
 POZIFY_MOCK_MODE=1 uv run python app.py
 ```
 
-To run the end-to-end app with real video QC, MediaPipe pose extraction, real rep segmentation, and
-annotated video rendering, set:
+To force the end-to-end app to use real video QC, MediaPipe pose extraction, real rep segmentation,
+and annotated video rendering even when `POZIFY_MOCK_MODE` is set elsewhere, set:
 
 ```bash
 POZIFY_MOCK_MODE=0 uv run python app.py
@@ -92,6 +92,10 @@ user profile + input video
 -> final report
 ```
 
+After classification, the pipeline creates one object for the detected exercise class with the video
+manifest, cleaned pose sequence, and user profile. Rep counting, rep analysis, variation detection,
+and issue marking then run as methods on that exercise object.
+
 ## Project Structure
 
 ```text
@@ -100,15 +104,28 @@ src/pozify/
   contracts.py
   pipeline.py
   artifacts.py
+  exercises/
+    push_up/
+      strategy.py
+      analyzer.py
+      issue_markers.py
+    squat/
+      strategy.py
+      analyzer.py
+      issue_markers.py
+    shoulder_press/
+      strategy.py
+      analyzer.py
+      issue_markers.py
+    shared/
+      analyzer.py
+      issue_marker.py
+      rep_counter.py
   steps/
     video_qc.py
     pose_landmarker.py
     pose_cleaning.py
     exercise_classifier.py
-    rep_counter.py
-    rep_analysis.py
-    variation_detector.py
-    issue_marker.py
     annotated_renderer.py
     coach_summary.py
     verifier.py
@@ -168,28 +185,34 @@ Each step lives in `src/pozify/steps/` and exposes a `run(...)` function.
 
 ## Adding Exercises
 
-Supported exercise metadata is centralized in `src/pozify/exercise_catalog.py`. To add a new mocked
+Supported exercise metadata is centralized in `src/pozify/exercise_catalog.py`. To add a new
 exercise, add one `ExerciseSpec` with:
 
 - `key` and `display_name`
 - `default_variation` and confidence
-- `metric_factory` for mock per-rep metrics
+- `metric_factory` for legacy/mock fallback metadata
 - optional `variation_hints`, default `not_issues`, and `mock_issue`
 
 The Gradio dropdown, profile validation, variation detector, rep analysis, and issue marker read from
 this catalog, so new exercises do not require changing each step just to become selectable. Real
-exercise-specific algorithms can still replace individual step implementations later while preserving
-the same pipeline contracts.
+exercise-specific code lives under `src/pozify/exercises/<exercise>/`:
+
+- `strategy.py`: rep-counting signal, variation logic, and exercise strategy wiring
+- `analyzer.py`: per-rep metrics
+- `issue_markers.py`: frame-level issue rules
+
+Shared analyzer and issue marker primitives live under `src/pozify/exercises/shared/`.
 
 Recommended replacement order:
 
 1. `video_qc.py`: read real video metadata with OpenCV.
 2. `pose_backends/`: add or refine pose model adapters such as MediaPipe or MMPose.
 3. `exercise_classifier.py`: load the exercise router model.
-4. `rep_counter.py`: implement exercise-specific state machines.
-5. `rep_analysis.py` and `issue_marker.py`: compute real metrics and issue scores.
-6. `annotated_renderer.py`: render skeleton overlays and issue highlights.
-7. `coach_summary.py`: call the selected small language model with retrieved knowledge cards.
+4. `exercises/<exercise>/strategy.py`: implement exercise-specific rep signals and variation logic.
+5. `exercises/<exercise>/analyzer.py`: compute per-rep metrics.
+6. `exercises/<exercise>/issue_markers.py`: compute real issue scores and intervals.
+7. `annotated_renderer.py`: render skeleton overlays and issue highlights.
+8. `coach_summary.py`: call the selected small language model with retrieved knowledge cards.
 
 ## Exercise Router Training
 
@@ -253,12 +276,12 @@ classes from the Riccio dataset, such as bicep curl, are mapped to `unknown`.
 
 ```bash
 uv run python -m unittest discover -s tests
-python3 -m py_compile app.py src/pozify/*.py src/pozify/steps/*.py src/pozify/ml/*.py scripts/*.py
+python3 -m py_compile app.py src/pozify/*.py src/pozify/steps/*.py src/pozify/exercises/*.py src/pozify/exercises/*/*.py
 uv run python -c "import app; from pozify.pipeline import run_pipeline; print('ok')"
 ```
 
-The unit tests run the full mocked pipeline with no video input and with a small fixture path, then
-assert deterministic top-level keys for each JSON artifact.
+The unit tests run the full mocked pipeline explicitly, then assert deterministic top-level keys for
+each JSON artifact.
 
 ## Git Hooks
 
