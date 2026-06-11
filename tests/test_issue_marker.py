@@ -162,6 +162,9 @@ class IssueMarkerTests(unittest.TestCase):
         self.assertGreaterEqual(hip_sag.end_frame - hip_sag.start_frame, 2)
         self.assertLess(hip_sag.evidence["body_line_score"], hip_sag.evidence["threshold"])
         self.assertIn("confidence", hip_sag.evidence)
+        self.assertIn("peak_frame", hip_sag.evidence)
+        self.assertGreaterEqual(hip_sag.evidence["peak_frame"], hip_sag.start_frame)
+        self.assertLessEqual(hip_sag.evidence["peak_frame"], hip_sag.end_frame)
         self.assertEqual(
             hip_sag.evidence["variation_context"]["detected_variation"],
             "wide_grip_push_up",
