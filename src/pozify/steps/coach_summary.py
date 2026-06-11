@@ -1,16 +1,71 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from pozify.contracts import (
     CoachSummary,
     ExerciseClassification,
     IssueMarkers,
     RepAnalysis,
     Reps,
+    SummaryGeneration,
     UserProfile,
     Variation,
 )
 from pozify.steps.summary_context import build_summary_context
 from pozify.steps.summary_provider import create_summary_provider
+
+
+@dataclass(frozen=True)
+class SummaryDraft:
+    summary: CoachSummary | None
+    generation: SummaryGeneration
+
+
+def generate(
+    profile: UserProfile,
+    classification: ExerciseClassification,
+    reps: Reps,
+    analysis: RepAnalysis,
+    variation: Variation,
+    issues: IssueMarkers,
+    *,
+    mock_steps: list[str] | None = None,
+) -> SummaryDraft:
+    context = build_summary_context(
+        profile,
+        classification,
+        reps,
+        analysis,
+        variation,
+        issues,
+        mock_steps=mock_steps,
+    )
+    provider_result = create_summary_provider().generate(context)
+    generation = SummaryGeneration(
+        provider=provider_result.provider,
+        backend=provider_result.backend,
+        model=provider_result.model,
+        prompt_contract_version=provider_result.prompt_contract_version,
+        parse_ok=provider_result.parse_ok,
+        parse_error=provider_result.parse_error,
+        verifier_passed=None,
+        fallback_used=False,
+        raw_output_present=provider_result.raw_output is not None,
+    )
+    if provider_result.payload is None:
+        return SummaryDraft(summary=None, generation=generation)
+    payload = provider_result.payload
+    summary = CoachSummary(
+        summary=payload["summary"],
+        what_went_well=list(payload["what_went_well"]),
+        main_findings=list(payload["main_findings"]),
+        variation_explanation=payload["variation_explanation"],
+        top_fixes=list(payload["top_fixes"]),
+        next_session_plan=list(payload["next_session_plan"]),
+        confidence_notes=list(payload["confidence_notes"]),
+    )
+    return SummaryDraft(summary=summary, generation=generation)
 
 
 def run(
@@ -23,7 +78,7 @@ def run(
     *,
     mock_steps: list[str] | None = None,
 ) -> CoachSummary:
-    context = build_summary_context(
+    draft = generate(
         profile,
         classification,
         reps,
@@ -32,16 +87,9 @@ def run(
         issues,
         mock_steps=mock_steps,
     )
-    payload = create_summary_provider().generate(context)
-    return CoachSummary(
-        summary=payload["summary"],
-        what_went_well=list(payload["what_went_well"]),
-        main_findings=list(payload["main_findings"]),
-        variation_explanation=payload["variation_explanation"],
-        top_fixes=list(payload["top_fixes"]),
-        next_session_plan=list(payload["next_session_plan"]),
-        confidence_notes=list(payload["confidence_notes"]),
-    )
+    if draft.summary is None:
+        raise RuntimeError(draft.generation.parse_error or "Summary provider failed to generate a payload.")
+    return draft.summary
 
 
 def build_fallback(

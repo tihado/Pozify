@@ -148,6 +148,19 @@ class Verification:
     notes: list[str]
 
 
+@dataclass(frozen=True)
+class SummaryGeneration:
+    provider: str
+    backend: str | None
+    model: str | None
+    prompt_contract_version: str
+    parse_ok: bool
+    parse_error: str | None
+    verifier_passed: bool | None
+    fallback_used: bool
+    raw_output_present: bool
+
+
 def to_dict(value: Any) -> Any:
     if hasattr(value, "__dataclass_fields__"):
         return asdict(value)
@@ -172,6 +185,7 @@ def validate_contract(name: str, value: Any) -> None:
         "issue_markers.json": _validate_issue_markers,
         "coach_summary.json": _validate_coach_summary,
         "verification.json": _validate_verification,
+        "summary_generation.json": _validate_summary_generation,
         "final_report.json": _validate_final_report,
         "manifest.json": _validate_run_manifest,
     }
@@ -521,6 +535,38 @@ def _validate_verification(value: Any, path: str) -> None:
         _require_type(key, str, f"{path}.checks key")
         _require_bool(value, f"{path}.checks.{key}")
     _require_string_list(payload["notes"], f"{path}.notes")
+
+
+def _validate_summary_generation(value: Any, path: str) -> None:
+    payload = _require_mapping(value, path)
+    _require_fields(
+        payload,
+        {
+            "provider",
+            "backend",
+            "model",
+            "prompt_contract_version",
+            "parse_ok",
+            "parse_error",
+            "verifier_passed",
+            "fallback_used",
+            "raw_output_present",
+        },
+        path,
+    )
+    _require_type(payload["provider"], str, f"{path}.provider")
+    if payload["backend"] is not None:
+        _require_type(payload["backend"], str, f"{path}.backend")
+    if payload["model"] is not None:
+        _require_type(payload["model"], str, f"{path}.model")
+    _require_type(payload["prompt_contract_version"], str, f"{path}.prompt_contract_version")
+    _require_bool(payload["parse_ok"], f"{path}.parse_ok")
+    if payload["parse_error"] is not None:
+        _require_type(payload["parse_error"], str, f"{path}.parse_error")
+    if payload["verifier_passed"] is not None:
+        _require_bool(payload["verifier_passed"], f"{path}.verifier_passed")
+    _require_bool(payload["fallback_used"], f"{path}.fallback_used")
+    _require_bool(payload["raw_output_present"], f"{path}.raw_output_present")
 
 
 def _validate_final_report(value: Any, path: str) -> None:

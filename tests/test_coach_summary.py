@@ -66,6 +66,37 @@ class CoachSummaryTests(unittest.TestCase):
         )
         self.assertIn("fallback summary", " ".join(fallback.main_findings).lower())
 
+    def test_generate_returns_parse_failure_metadata_for_invalid_slm_output(self) -> None:
+        profile, classification, reps, analysis, variation, issues = self._inputs()
+        with patch.dict("os.environ", {"POZIFY_SUMMARY_PROVIDER": "slm_local"}):
+            with patch(
+                "pozify.steps.summary_provider.create_summary_slm_backend"
+            ) as create_backend:
+                create_backend.return_value = type(
+                    "FakeBackend",
+                    (),
+                    {
+                        "backend_name": "transformers",
+                        "model_name": "Qwen/Fake",
+                        "generate_text": lambda self, prompt: type(
+                            "BackendResult",
+                            (),
+                            {
+                                "text": "not valid json",
+                                "backend": "transformers",
+                                "model": "Qwen/Fake",
+                            },
+                        )(),
+                    },
+                )()
+                draft = coach_summary.generate(
+                    profile, classification, reps, analysis, variation, issues, mock_steps=[]
+                )
+
+        self.assertIsNone(draft.summary)
+        self.assertFalse(draft.generation.parse_ok)
+        self.assertEqual(draft.generation.provider, "slm_local")
+
 
 if __name__ == "__main__":
     unittest.main()
