@@ -9,14 +9,15 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify.contracts import (
+    IssueMarkers,
     PoseFrame,
     PoseSequence,
     Rep,
     Reps,
     UserProfile,
+    VideoManifest,
 )
 from pozify.exercises import create_exercise_strategy
-from pozify.steps import issue_marker, rep_analysis, variation_detector
 
 
 def _frame(frame_index: int, landmarks: dict[str, dict[str, float]]) -> PoseFrame:
@@ -49,6 +50,24 @@ def _profile(exercise: str = "auto") -> UserProfile:
         intended_variation=None,
         known_limitations=[],
         equipment="bodyweight",
+    )
+
+
+def _video_manifest(sequence: PoseSequence) -> VideoManifest:
+    return VideoManifest(
+        video_path=None,
+        fps=30.0,
+        duration_sec=round(len(sequence.frames) / 30.0, 3),
+        total_frames=len(sequence.frames),
+        sampled_frames=len(sequence.frames),
+        width=720,
+        height=1280,
+        codec=None,
+        container=None,
+        brightness_mean=None,
+        blur_laplacian_var=None,
+        quality_warnings=[],
+        analysis_allowed=True,
     )
 
 
@@ -122,12 +141,17 @@ def _shoulder_press_landmarks(frame_index: int, lift: float) -> dict[str, dict[s
     }
 
 
-def _run_markers(exercise: str, sequence: PoseSequence):
-    exercise_strategy = create_exercise_strategy(exercise)
+def _run_markers(exercise: str, sequence: PoseSequence) -> IssueMarkers:
+    exercise_strategy = create_exercise_strategy(
+        exercise,
+        video_manifest=_video_manifest(sequence),
+        pose_sequence=sequence,
+        profile=_profile(exercise),
+    )
     reps = _reps(exercise, len(sequence.frames) - 1)
-    analysis = rep_analysis.run(exercise_strategy, reps, sequence)
-    variation = variation_detector.run(exercise_strategy, analysis, _profile(exercise))
-    return issue_marker.run(exercise_strategy, reps, analysis, variation, sequence)
+    analysis = exercise_strategy.analyze_reps(reps)
+    variation = exercise_strategy.resolve_variation(analysis)
+    return exercise_strategy.mark_issues(reps, analysis, variation)
 
 
 class IssueMarkerTests(unittest.TestCase):
