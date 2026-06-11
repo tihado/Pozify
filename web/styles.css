@@ -339,6 +339,96 @@ input[type="text"]:focus,
   opacity: 0.72;
 }
 
+.progress-panel {
+  border: 1px solid rgba(37, 44, 31, 0.12);
+  border-radius: 8px;
+  margin-top: 14px;
+  padding: 14px;
+  background: rgba(255, 253, 247, 0.66);
+}
+
+.progress-panel h3 {
+  margin: 0 0 12px;
+  color: var(--forest);
+  font-size: 0.96rem;
+}
+
+.progress-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progress-step {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.progress-step.done {
+  color: #304133;
+}
+
+.progress-step.active {
+  color: var(--forest-deep);
+  font-weight: 600;
+}
+
+.progress-dot {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(33, 79, 58, 0.3);
+  border-radius: 999px;
+  margin-top: 4px;
+  background: rgba(255, 253, 247, 0.9);
+}
+
+.progress-step.done .progress-dot {
+  border-color: var(--forest);
+  background: var(--forest);
+}
+
+.progress-step.active .progress-dot {
+  border-color: var(--clay);
+  background: var(--clay);
+  box-shadow: 0 0 0 5px rgba(190, 104, 75, 0.14);
+}
+
+.scan-insights {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.scan-insight {
+  min-width: 0;
+  border: 1px solid rgba(37, 44, 31, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 253, 247, 0.74);
+}
+
+.scan-insight span,
+.scan-insight small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.scan-insight strong {
+  display: block;
+  overflow-wrap: anywhere;
+  margin: 4px 0;
+  color: var(--forest-deep);
+  font-size: 1.04rem;
+}
+
 .result-stage {
   display: grid;
   min-height: 470px;
@@ -374,6 +464,13 @@ input[type="text"]:focus,
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin: 16px 0;
 }
@@ -423,6 +520,106 @@ input[type="text"]:focus,
   margin: 0;
   padding-left: 18px;
   color: #3e4438;
+}
+
+.full-note {
+  margin-top: 12px;
+}
+
+.full-note p {
+  margin: 0;
+}
+
+.table-wrap {
+  overflow: auto;
+  border: 1px solid rgba(37, 44, 31, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 253, 247, 0.68);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 620px;
+}
+
+th,
+td {
+  border-bottom: 1px solid rgba(37, 44, 31, 0.1);
+  padding: 11px 12px;
+  text-align: left;
+}
+
+th {
+  color: var(--forest);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+td {
+  color: #3e4438;
+}
+
+.rep-grid,
+.issue-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.rep-card,
+.issue-card {
+  border: 1px solid rgba(37, 44, 31, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 253, 247, 0.66);
+}
+
+.rep-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.rep-card strong {
+  color: var(--forest-deep);
+}
+
+.rep-card span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.issue-card {
+  overflow: hidden;
+}
+
+.issue-card .timeline-main,
+.issue-card .timeline-meta {
+  padding: 10px 12px;
+}
+
+.issue-card .timeline-meta {
+  padding-top: 0;
+}
+
+.issue-thumb,
+.issue-clip {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  background: #171815;
+}
+
+.issue-clip {
+  color: var(--paper);
+}
+
+.issue-thumb.empty {
+  display: grid;
+  color: rgba(255, 249, 236, 0.62);
+  place-items: center;
 }
 
 .quality-list {
@@ -504,6 +701,24 @@ input[type="text"]:focus,
   background: rgba(33, 79, 58, 0.08);
 }
 
+.timeline-meta .severity-chip.minor {
+  border: 1px solid rgba(49, 75, 99, 0.18);
+  color: #27465a;
+  background: rgba(49, 75, 99, 0.12);
+}
+
+.timeline-meta .severity-chip.moderate {
+  border: 1px solid rgba(190, 104, 75, 0.28);
+  color: #70402e;
+  background: rgba(190, 104, 75, 0.18);
+}
+
+.timeline-meta .severity-chip.high {
+  border: 1px solid rgba(132, 45, 37, 0.32);
+  color: #6d261f;
+  background: rgba(132, 45, 37, 0.2);
+}
+
 .quality-list span {
   border-radius: 999px;
   padding: 7px 10px;
@@ -581,7 +796,11 @@ input[type="text"]:focus,
 @media (max-width: 980px) {
   .workspace,
   .note-grid,
-  .stat-grid {
+  .stat-grid,
+  .metric-grid,
+  .scan-insights,
+  .rep-grid,
+  .issue-card-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -149,6 +149,7 @@ def marker_from_group(
         rule.metric_name: round(peak_score.value, 4),
         "threshold": rule.threshold,
         "confidence": confidence(group, rep_item, variation),
+        "peak_frame": peak_score.frame.frame_index,
         "variation_context": {
             "detected_variation": variation.detected_variation,
             "variation_confidence": variation.variation_confidence,
