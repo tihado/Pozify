@@ -7,6 +7,7 @@ from typing import Any
 import cv2
 
 from pozify.contracts import PoseFrame, PoseSequence, VideoManifest
+from pozify.hf_spaces import default_spaces_gpu_duration, spaces_gpu
 from pozify.steps.pose_backends import (
     LANDMARK_SCHEMA,
     MockPoseBackend,
@@ -160,6 +161,16 @@ def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequ
     )
 
 
+def _gpu_duration(*_args: Any, **_kwargs: Any) -> int:
+    return default_spaces_gpu_duration()
+
+
+@spaces_gpu(duration=_gpu_duration)
+def _run_named_backend(manifest: VideoManifest, backend_name: str) -> PoseSequence:
+    selected_backend = create_pose_backend(backend_name)
+    return _run_with_backend(manifest, selected_backend)
+
+
 def _run_mock(manifest: VideoManifest) -> PoseSequence:
     frames: list[PoseFrame] = []
     backend = MockPoseBackend()
@@ -204,5 +215,4 @@ def run(
         return _run_mock(manifest)
     if backend is not None:
         return _run_with_backend(manifest, backend)
-    selected_backend = create_pose_backend(backend_name or _env_pose_backend())
-    return _run_with_backend(manifest, selected_backend)
+    return _run_named_backend(manifest, backend_name or _env_pose_backend())
