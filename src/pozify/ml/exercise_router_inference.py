@@ -18,11 +18,11 @@ HF_REPO_ID_ENV = "POZIFY_ROUTER_HF_REPO_ID"
 HF_REVISION_ENV = "POZIFY_ROUTER_HF_REVISION"
 HF_DISABLE_ENV = "POZIFY_ROUTER_DISABLE_HF"
 MODEL_FILENAMES = (
-    "router.joblib",
     "router.pt",
+    "temporal.pt",
+    "router.joblib",
     "model.joblib",
     "baseline.joblib",
-    "temporal.pt",
     "exercise_router.joblib",
 )
 MIN_FINAL_CONFIDENCE = 0.65

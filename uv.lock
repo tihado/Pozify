@@ -2191,6 +2191,7 @@ dependencies = [
     { name = "opencv-python-headless" },
     { name = "pydantic" },
     { name = "scikit-learn" },
+    { name = "torch" },
 ]
 
 [package.optional-dependencies]
@@ -2199,7 +2200,6 @@ dev = [
 ]
 train = [
     { name = "datasets" },
-    { name = "torch" },
 ]
 
 [package.metadata]
@@ -2216,7 +2216,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.10,<=2.12.5" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5.0" },
     { name = "scikit-learn", specifier = ">=1.4.0" },
-    { name = "torch", marker = "extra == 'train'", specifier = ">=2.2.0" },
+    { name = "torch", specifier = ">=2.2.0" },
 ]
 provides-extras = ["dev", "train"]
 

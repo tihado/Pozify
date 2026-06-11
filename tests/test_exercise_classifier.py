@@ -334,17 +334,16 @@ class ExerciseRouterEvaluationTests(unittest.TestCase):
         self.assertEqual(evaluation.confusion_matrix["shoulder_press"]["unknown"], 1)
         self.assertEqual(evaluation.unknown_rejection_rate, 1.0)
 
-    def test_selects_temporal_only_when_metrics_win(self) -> None:
+    def test_prefers_temporal_when_available(self) -> None:
         baseline = {"name": "baseline", "accuracy": 0.91, "unknown_rejection_rate": 0.8}
-        temporal = {"name": "temporal", "accuracy": 0.92, "unknown_rejection_rate": 0.7}
+        temporal = {"name": "temporal", "accuracy": 0.90, "unknown_rejection_rate": 0.7}
 
         self.assertEqual(select_router_candidate([baseline, temporal]), temporal)
 
-    def test_selects_baseline_on_metric_tie(self) -> None:
+    def test_selects_baseline_when_temporal_is_missing(self) -> None:
         baseline = {"name": "baseline", "accuracy": 0.91, "unknown_rejection_rate": 0.8}
-        temporal = {"name": "temporal", "accuracy": 0.91, "unknown_rejection_rate": 0.8}
 
-        self.assertEqual(select_router_candidate([baseline, temporal]), baseline)
+        self.assertEqual(select_router_candidate([baseline]), baseline)
 
 
 if __name__ == "__main__":

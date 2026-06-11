@@ -93,15 +93,15 @@ export POZIFY_ROUTER_DISABLE_HF=1
 
 ## Expected Artifact Selection
 
-The current trained artifacts select the baseline:
+The current active router selects the BiLSTM temporal artifact:
 
 ```json
 {
-  "selected_model": "baseline.joblib",
-  "selected_artifact": "router.joblib",
-  "reason": "highest accuracy, then unknown rejection rate; baseline wins ties"
+  "selected_model": "temporal.pt",
+  "selected_artifact": "temporal.pt",
+  "reason": "prefer BiLSTM temporal when available; baseline falls back when temporal is missing"
 }
 ```
 
-The BiLSTM temporal artifact is uploaded for reproducibility and future selection, but it is not the
-active artifact because the baseline currently scores slightly higher.
+The baseline artifact is still uploaded for comparison and fallback, but runtime routing uses the
+BiLSTM when `router_selection.json` points at `temporal.pt`.

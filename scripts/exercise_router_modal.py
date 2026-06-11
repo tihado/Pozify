@@ -546,7 +546,7 @@ def evaluate() -> dict[str, Any]:
             {
                 "name": "temporal",
                 "source_artifact": temporal_path,
-                "selected_artifact": "router.pt",
+                "selected_artifact": "temporal.pt",
                 **temporal_evaluation,
             }
         )
@@ -560,12 +560,10 @@ def evaluate() -> dict[str, Any]:
     selected = select_router_candidate(candidates)
     if selected["selected_artifact"] == "router.joblib":
         shutil.copyfile(selected["source_artifact"], MODEL_ROOT / "router.joblib")
-    else:
-        shutil.copyfile(selected["source_artifact"], MODEL_ROOT / "router.pt")
     selection = {
         "selected_model": f"{selected['name']}.{ 'joblib' if selected['name'] == 'baseline' else 'pt' }",
         "selected_artifact": selected["selected_artifact"],
-        "reason": "highest accuracy, then unknown rejection rate; baseline wins ties",
+        "reason": "prefer BiLSTM temporal when available; baseline falls back when temporal is missing",
     }
     _write_json(MODEL_ROOT / "router_selection.json", selection)
     result = {

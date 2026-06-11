@@ -250,8 +250,8 @@ compact BiLSTM over 30-frame feature tensors on a Modal A10 GPU and writes `temp
 73 hidden units, 0.2174 dropout, 0.0004 learning rate, batch size 54, and 73 epochs
 (https://arxiv.org/abs/2411.11548). Evaluation scores every available trained artifact, writes
 per-model metrics into `evaluation.json`, and records the active artifact in `router_selection.json`.
-Baseline wins ties to keep runtime inference lightweight unless the temporal model clearly improves
-the metrics.
+The current selection policy prefers the BiLSTM temporal model when it is available; the baseline is
+kept as a fallback/reference artifact.
 
 Download the selected artifact and its selection file after evaluation, then place them under:
 
@@ -259,9 +259,9 @@ Download the selected artifact and its selection file after evaluation, then pla
 models/exercise_router/active/
 ```
 
-For the baseline this directory should contain `router.joblib`; for the temporal model it should
-contain `router.pt`. In both cases, include `router_selection.json` when present so the local loader
-can choose the intended active artifact even if multiple artifacts exist.
+For the active BiLSTM router this directory should contain `temporal.pt` and
+`router_selection.json`. Keep `router.joblib` only when you want the baseline artifact available for
+comparison or fallback.
 
 To publish and load the router from Hugging Face, use the setup notes in
 [docs/huggingface-router-release.md](docs/huggingface-router-release.md). The draft model card is in

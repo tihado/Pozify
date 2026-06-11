@@ -72,7 +72,7 @@ def select_router_candidate(candidates: Sequence[Mapping[str, Any]]) -> Mapping[
 
 def router_candidate_sort_key(candidate: Mapping[str, Any]) -> tuple[float, float, int]:
     return (
+        1 if candidate.get("name") == "temporal" else 0,
         float(candidate.get("accuracy", 0.0)),
         float(candidate.get("unknown_rejection_rate", 0.0)),
-        1 if candidate.get("name") == "baseline" else 0,
     )

@@ -5,16 +5,16 @@ Generated after the Modal training run on June 11, 2026.
 ## Summary
 
 The exercise router was trained and evaluated for `squat`, `push_up`, `shoulder_press`, and
-`unknown`. The final active artifact is the scikit-learn baseline because it scored slightly higher
-than the BiLSTM temporal model in the artifact selection evaluation.
+`unknown`. The final active artifact is the BiLSTM temporal model. The scikit-learn baseline is
+retained as a reference and fallback artifact.
 
 | Field | Value |
 | --- | --- |
-| Selected model | `baseline.joblib` |
-| Selected artifact | `router.joblib` |
-| Selection rule | Highest accuracy, then unknown rejection rate; baseline wins ties |
-| Local active path | `models/exercise_router/active/router.joblib` |
-| Temporal artifact path | `models/exercise_router/active/temporal.pt` |
+| Selected model | `temporal.pt` |
+| Selected artifact | `temporal.pt` |
+| Selection rule | Prefer BiLSTM temporal when available; baseline falls back when temporal is missing |
+| Local active path | `models/exercise_router/active/temporal.pt` |
+| Baseline artifact path | `models/exercise_router/active/router.joblib` |
 
 ## Data
 
@@ -48,6 +48,29 @@ The BiLSTM hyperparameters follow the Riccio exercise-classification paper:
 | Batch size | 54 |
 | Final training loss | 0.0003 |
 
+## Model Complexity
+
+Counts were checked from the local trained artifacts with `uv run --extra train`.
+
+| Model | Count type | Value |
+| --- | --- | ---: |
+| Baseline | Neural-network-style trainable parameters | 0 |
+| Baseline | Input features | 2,574 |
+| Baseline | Trees | 800 |
+| Baseline | Total tree nodes | 20,778 |
+| Baseline | Split nodes | 9,989 |
+| Baseline | Leaves | 10,789 |
+| Baseline | Approximate learned scalar state | 35,915 |
+| BiLSTM temporal | Trainable parameters | 294,924 |
+| BiLSTM temporal | Input features per frame | 429 |
+| BiLSTM temporal | Hidden units | 73 |
+| BiLSTM temporal | Layers | 1 |
+| BiLSTM temporal | Output classes | 4 |
+
+The baseline is a tree-based `HistGradientBoostingClassifier`, so it does not have trainable tensor
+parameters in the same sense as a neural network. The BiLSTM parameter count includes both LSTM
+directions and the linear classification head.
+
 ## Training Metrics
 
 | Model | Validation accuracy | Unknown rejection rate |
@@ -58,6 +81,8 @@ The BiLSTM hyperparameters follow the Riccio exercise-classification paper:
 ## Selection Evaluation
 
 The final evaluation scored every available trained artifact on the cached router windows.
+The baseline scored slightly higher on this cache, but the active router is BiLSTM so routing uses
+the temporal pose-window sequence directly.
 
 | Model | Artifact | Accuracy | Unknown rejection rate |
 | --- | --- | ---: | ---: |
@@ -112,12 +137,13 @@ uv run modal run scripts/exercise_router_modal.py --stage train-temporal
 uv run modal run scripts/exercise_router_modal.py --stage evaluate
 ```
 
-Download the selected artifacts after evaluation:
+Download the active artifact and selection file after evaluation. Download `router.joblib` too when
+you want to keep the baseline for comparison or fallback:
 
 ```bash
-uv run modal volume get --force pozify-router-models /router.joblib models/exercise_router/active/router.joblib
 uv run modal volume get --force pozify-router-models /temporal.pt models/exercise_router/active/temporal.pt
 uv run modal volume get --force pozify-router-models /router_selection.json models/exercise_router/active/router_selection.json
+uv run modal volume get --force pozify-router-models /router.joblib models/exercise_router/active/router.joblib
 ```
 
 ## Notes

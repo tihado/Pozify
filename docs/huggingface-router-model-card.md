@@ -23,17 +23,17 @@ Current selected artifact:
 
 ```json
 {
-  "selected_model": "baseline.joblib",
-  "selected_artifact": "router.joblib",
-  "reason": "highest accuracy, then unknown rejection rate; baseline wins ties"
+  "selected_model": "temporal.pt",
+  "selected_artifact": "temporal.pt",
+  "reason": "prefer BiLSTM temporal when available; baseline falls back when temporal is missing"
 }
 ```
 
 Artifacts:
 
-- `router.joblib`: selected scikit-learn baseline artifact.
+- `temporal.pt`: selected PyTorch BiLSTM temporal model trained over 30-frame feature tensors.
 - `router_selection.json`: active artifact selector used by Pozify runtime loading.
-- `temporal.pt`: PyTorch BiLSTM temporal model trained over 30-frame feature tensors.
+- `router.joblib`: scikit-learn baseline artifact kept for comparison and fallback.
 - `training_report.md`: training and evaluation metrics.
 
 ## Intended Use
