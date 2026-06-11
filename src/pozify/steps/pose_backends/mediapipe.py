@@ -6,7 +6,10 @@ from typing import Any
 from urllib.request import urlretrieve
 
 from pozify.hf_spaces import zero_gpu_enabled
-from pozify.steps.pose_backends.base import PoseDetection
+from pozify.steps.pose_backends.base import (
+    PoseBackendUnavailableError,
+    PoseDetection,
+)
 from pozify.steps.pose_backends.landmarks import landmark_list_to_dict
 
 
@@ -53,21 +56,27 @@ class MediaPipePoseBackend:
         try:
             import mediapipe as mp
         except ImportError as exc:
-            raise RuntimeError(
+            raise PoseBackendUnavailableError(
                 "MediaPipe is required for the mediapipe pose backend. Install dependencies with uv sync."
             ) from exc
 
         if hasattr(mp, "solutions"):
-            return mp.solutions.pose.Pose(
-                static_image_mode=False,
-                model_complexity=1,
-                smooth_landmarks=False,
-                enable_segmentation=False,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5,
-            )
+            try:
+                return mp.solutions.pose.Pose(
+                    static_image_mode=False,
+                    model_complexity=1,
+                    smooth_landmarks=False,
+                    enable_segmentation=False,
+                    min_detection_confidence=0.5,
+                    min_tracking_confidence=0.5,
+                )
+            except OSError as exc:
+                raise _native_library_error(exc) from exc
 
-        return _MediaPipeTasksPoseAdapter(mp, _ensure_pose_task_model())
+        try:
+            return _MediaPipeTasksPoseAdapter(mp, _ensure_pose_task_model())
+        except OSError as exc:
+            raise _native_library_error(exc) from exc
 
 
 class _MediaPipeTasksPoseAdapter:
@@ -149,3 +158,11 @@ def _ensure_pose_task_model() -> Path:
     model_path.parent.mkdir(parents=True, exist_ok=True)
     urlretrieve(POSE_TASK_MODEL_URL, model_path)
     return model_path
+
+
+def _native_library_error(exc: OSError) -> PoseBackendUnavailableError:
+    return PoseBackendUnavailableError(
+        "MediaPipe could not load native system libraries. On Hugging Face Spaces, "
+        "add libgles2, libegl1, libgl1, and libglib2.0-0 to packages.txt. "
+        f"Original error: {exc}"
+    )

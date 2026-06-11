@@ -85,6 +85,8 @@ The runtime uses these defaults:
 The MediaPipe Tasks backend tries its GPU delegate on ZeroGPU and falls back to CPU if unavailable.
 The older `mp.solutions.pose` path remains CPU-only. The Torch exercise router loads and predicts
 inside its ZeroGPU-wrapped function, so model objects are not pickled across the API boundary.
+The root `packages.txt` installs the native GLES/EGL/OpenGL libraries required by MediaPipe Tasks
+on the Hugging Face runtime.
 
 When running in real mode, the UI summary now shows:
 
