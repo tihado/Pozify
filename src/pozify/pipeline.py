@@ -70,7 +70,7 @@ def run_pipeline(
     cleaned_pose_sequence = pose_cleaning.run(pose_sequence)
     write_artifact("pose_sequence.json", cleaned_pose_sequence)
 
-    classification = exercise_classifier.run(cleaned_pose_sequence, profile)
+    classification = exercise_classifier.run(cleaned_pose_sequence, profile, mock=mock_mode)
     write_artifact("exercise_classification.json", classification)
 
     reps, rep_debug = rep_counter.run(classification, cleaned_pose_sequence)
@@ -95,13 +95,14 @@ def run_pipeline(
     )
     analysis_mode = "mock" if mock_mode else "real"
     mock_steps = [
-        "exercise_classifier",
         "rep_analysis",
         "variation_detector",
         "issue_marker",
         "coach_summary",
         "verifier",
     ]
+    if mock_mode:
+        mock_steps.insert(0, "exercise_classifier")
 
     summary = coach_summary.run(profile, classification, reps, analysis, variation, issues)
     write_artifact("coach_summary.json", summary)

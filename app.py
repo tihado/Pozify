@@ -102,10 +102,16 @@ def analyze_video(
             str(artifact_path),
         )
 
+    fallback_note = (
+        "- **Router fallback:** Confidence is low or window predictions disagree; select the exercise manually and rerun.\n"
+        if report["exercise"]["fallback_required"]
+        else ""
+    )
     markdown = f"""## Scan Summary
 
-- **Exercise router output:** {report["exercise"]["exercise"]} (mock confidence placeholder: {report["exercise"]["confidence"]:.0%})
-- **Variation label:** {report["variation"]["detected_variation"]} (mock confidence placeholder: {report["variation"]["variation_confidence"]:.0%})
+- **Exercise router output:** {report["exercise"]["exercise"]} (confidence: {report["exercise"]["confidence"]:.0%})
+- **Router fallback required:** {report["exercise"]["fallback_required"]}
+{fallback_note}- **Variation label:** {report["variation"]["detected_variation"]} (mock confidence placeholder: {report["variation"]["variation_confidence"]:.0%})
 - **Reps:** {len(report["reps"]["reps"])}
 - **Analysis mode:** {report["artifacts"].get("analysis_mode", "unknown")}
 - **Pose source:** {report["artifacts"].get("pose_source", "unknown")}
