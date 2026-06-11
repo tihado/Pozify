@@ -1,6 +1,7 @@
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "https://esm.sh/react@18.2.0";
 import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
@@ -60,6 +61,103 @@ function formatValue(value) {
 
 function percent(value) {
   return typeof value === "number" ? `${Math.round(value * 100)}%` : "n/a";
+}
+
+const runningProgressSteps = [
+  {
+    id: "quality",
+    text: "Tôi đang kiểm tra chất lượng video của bạn.",
+    delayMs: 0,
+  },
+  {
+    id: "pose",
+    text: "Tôi đang tiến hành phân tích dáng tập của bạn.",
+    delayMs: 900,
+  },
+  {
+    id: "exercise",
+    text: "Tôi đang nhận diện bài tập bạn đang thực hiện.",
+    delayMs: 1800,
+  },
+  {
+    id: "reps",
+    text: "Tôi đang đếm số reps trong video.",
+    delayMs: 2800,
+  },
+  {
+    id: "issues",
+    text: "Tôi đang phân tích các lỗi sai trong khi tập của bạn.",
+    delayMs: 3900,
+  },
+];
+
+function runningProgressState(activeIndex = 0) {
+  return runningProgressSteps.map((step, index) => ({
+    id: step.id,
+    text: step.text,
+    status:
+      index < activeIndex ? "done" : index === activeIndex ? "active" : "pending",
+  }));
+}
+
+function finalProgressState(result) {
+  const report = result.report;
+  const warnings = report.video_manifest?.quality_warnings || [];
+  const exercise = label(report.exercise?.exercise || "movement");
+  const repCount = report.reps?.reps?.length || 0;
+  const issues = report.issue_markers?.issues || [];
+  return [
+    {
+      id: "quality",
+      status: "done",
+      text: warnings.length
+        ? `Video có một vài điểm cần lưu ý: ${warnings.map(label).join(", ")}.`
+        : "Ồ, video của bạn có chất lượng quay tốt đó.",
+    },
+    {
+      id: "pose",
+      status: "done",
+      text: "Tôi đã phân tích xong dáng tập và các điểm landmark chính.",
+    },
+    {
+      id: "exercise",
+      status: "done",
+      text: `Chúng tôi nhận thấy bạn đang thực hiện ${exercise}.`,
+    },
+    {
+      id: "reps",
+      status: "done",
+      text: `Tôi đếm được bạn đã thực hiện ${repCount} reps ${exercise}.`,
+    },
+    {
+      id: "issues",
+      status: "done",
+      text: issues.length
+        ? `Tôi tìm thấy ${issues.length} điểm cần chú ý trong khi tập của bạn.`
+        : "Tôi không thấy lỗi kỹ thuật rõ ràng trong bài tập này.",
+    },
+  ];
+}
+
+function ProgressPanel({ steps }) {
+  if (!steps.length) return null;
+  return h(
+    "section",
+    { className: "progress-panel", "aria-live": "polite" },
+    h("h3", null, "Analysis progress"),
+    h(
+      "ol",
+      { className: "progress-list" },
+      steps.map((step) =>
+        h(
+          "li",
+          { className: `progress-step ${step.status}`, key: step.id },
+          h("span", { className: "progress-dot", "aria-hidden": "true" }),
+          h("span", null, step.text),
+        ),
+      ),
+    ),
+  );
 }
 
 function SummaryTab({ result }) {
@@ -536,6 +634,8 @@ function App() {
   const [activeTab, setActiveTab] = useState("summary");
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const [progressSteps, setProgressSteps] = useState([]);
+  const progressTimers = useRef([]);
 
   const previewUrl = useMemo(
     () => (file ? URL.createObjectURL(file) : ""),
@@ -555,6 +655,29 @@ function App() {
     };
   }, [previewUrl]);
 
+  useEffect(() => {
+    return () => {
+      progressTimers.current.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  function clearProgressTimers() {
+    progressTimers.current.forEach((timer) => clearTimeout(timer));
+    progressTimers.current = [];
+  }
+
+  function startProgressTimeline() {
+    clearProgressTimers();
+    setProgressSteps(runningProgressState(0));
+    progressTimers.current = runningProgressSteps
+      .slice(1)
+      .map((step, index) =>
+        setTimeout(() => {
+          setProgressSteps(runningProgressState(index + 1));
+        }, step.delayMs),
+      );
+  }
+
   function toggleLimitation(value) {
     setLimitations((current) =>
       current.includes(value)
@@ -568,6 +691,7 @@ function App() {
     setError("");
     setStatus("running");
     setResult(null);
+    startProgressTimeline();
 
     const payload = new FormData();
     if (file) payload.append("video", file);
@@ -585,10 +709,20 @@ function App() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.detail || "Analysis failed.");
+      clearProgressTimers();
       setResult(body);
+      setProgressSteps(finalProgressState(body));
       setStatus("complete");
     } catch (caught) {
+      clearProgressTimers();
       setError(caught.message || "Analysis failed.");
+      setProgressSteps([
+        {
+          id: "error",
+          status: "active",
+          text: "Phân tích chưa hoàn tất. Vui lòng thử lại với video khác hoặc kiểm tra kết nối.",
+        },
+      ]);
       setStatus("idle");
     }
   }
@@ -741,6 +875,7 @@ function App() {
           status === "running" ? "Analyzing..." : "Analyze Form",
         ),
         error ? h("div", { className: "error" }, error) : null,
+        h(ProgressPanel, { steps: progressSteps }),
       ),
       h(
         "section",
