@@ -136,6 +136,11 @@ class PipelineContractTests(unittest.TestCase):
             self.assertTrue(artifact_path.exists(), artifact_name)
             payload = json.loads(artifact_path.read_text(encoding="utf-8"))
             self.assertEqual(sorted(payload.keys()), keys, artifact_name)
+            if artifact_name == "final_report.json":
+                self.assertIn("issue_thumbnail_paths", payload["artifacts"])
+                self.assertIsInstance(payload["artifacts"]["issue_thumbnail_paths"], list)
+                self.assertIn("issue_clip_paths", payload["artifacts"])
+                self.assertIsInstance(payload["artifacts"]["issue_clip_paths"], list)
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertTrue(manifest["mock_mode"])
@@ -177,6 +182,34 @@ class PipelineContractTests(unittest.TestCase):
         self.assertTrue(report["video_manifest"]["analysis_allowed"])
         self.assertEqual(report["video_manifest"]["width"], 640)
         self.assertEqual(report["video_manifest"]["height"], 480)
+
+    def test_pipeline_emits_progress_after_steps(self) -> None:
+        events: list[dict[str, object]] = []
+
+        result = pipeline.run_pipeline(
+            video_path=None,
+            profile_input=PROFILE_INPUT,
+            mock=True,
+            progress=events.append,
+        )
+
+        self._assert_pipeline_artifacts(result)
+        done_events = [
+            event
+            for event in events
+            if event.get("type") == "progress" and event.get("status") == "done"
+        ]
+        self.assertEqual(
+            [event["step"] for event in done_events],
+            ["quality", "pose", "exercise", "reps", "issues", "render", "coach"],
+        )
+        payload_by_step = {
+            str(event["step"]): event.get("payload", {}) for event in done_events
+        }
+        self.assertEqual(payload_by_step["exercise"]["exercise"], "squat")
+        self.assertEqual(payload_by_step["reps"]["rep_count"], 0)
+        self.assertEqual(payload_by_step["issues"]["issue_count"], 0)
+        self.assertIn("annotated_video_path", payload_by_step["render"])
 
     def test_contract_validation_rejects_missing_required_field(self) -> None:
         payload = {
