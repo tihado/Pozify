@@ -19,6 +19,7 @@ from pozify.contracts import (
     Variation,
 )
 from pozify.steps import coach_summary, verifier
+from pozify.steps.summary_provider import SummaryProviderResult
 
 
 class CoachSummaryTests(unittest.TestCase):
@@ -68,34 +69,26 @@ class CoachSummaryTests(unittest.TestCase):
 
     def test_generate_returns_parse_failure_metadata_for_invalid_slm_output(self) -> None:
         profile, classification, reps, analysis, variation, issues = self._inputs()
-        with patch.dict("os.environ", {"POZIFY_SUMMARY_PROVIDER": "slm_local"}):
+        with patch.dict("os.environ", {"POZIFY_SUMMARY_PROVIDER": "slm_cloud"}):
             with patch(
-                "pozify.steps.summary_provider.create_summary_slm_backend"
-            ) as create_backend:
-                create_backend.return_value = type(
-                    "FakeBackend",
-                    (),
-                    {
-                        "backend_name": "transformers",
-                        "model_name": "Qwen/Fake",
-                        "generate_text": lambda self, prompt: type(
-                            "BackendResult",
-                            (),
-                            {
-                                "text": "not valid json",
-                                "backend": "transformers",
-                                "model": "Qwen/Fake",
-                            },
-                        )(),
-                    },
-                )()
+                "pozify.steps.summary_provider.HuggingFaceCloudSummaryProvider.generate"
+            ) as generate:
+                generate.return_value = SummaryProviderResult(
+                    payload=None,
+                    provider="slm_cloud",
+                    backend="huggingface",
+                    model="Qwen/Fake",
+                    prompt_contract_version="v1",
+                    parse_ok=False,
+                    parse_error="not valid json",
+                )
                 draft = coach_summary.generate(
                     profile, classification, reps, analysis, variation, issues, mock_steps=[]
                 )
 
         self.assertIsNone(draft.summary)
         self.assertFalse(draft.generation.parse_ok)
-        self.assertEqual(draft.generation.provider, "slm_local")
+        self.assertEqual(draft.generation.provider, "slm_cloud")
 
     def test_fallback_hides_internal_provider_error_from_confidence_notes(self) -> None:
         profile, classification, reps, analysis, variation, issues = self._inputs()
@@ -108,16 +101,14 @@ class CoachSummaryTests(unittest.TestCase):
             issues,
             verification_notes=[
                 "Summary provider failed before verification.",
-                "The local SLM summary backend requires transformers. Install the optional summary dependencies before using POZIFY_SUMMARY_PROVIDER=slm_local.",
-                "The GGUF summary backend requires llama-cpp-python. Install the optional summary dependencies before using POZIFY_SUMMARY_BACKEND=gguf.",
+                "The Hugging Face cloud summary provider requires HF_TOKEN or POZIFY_SUMMARY_API_KEY.",
                 "Conservative fallback summary returned.",
             ],
             mock_steps=[],
         )
 
         joined = " ".join(fallback.confidence_notes).lower()
-        self.assertNotIn("requires transformers", joined)
-        self.assertNotIn("requires llama-cpp-python", joined)
+        self.assertNotIn("hf_token", joined)
         self.assertNotIn("provider failed before verification", joined)
         self.assertIn("fallback summary", joined)
 

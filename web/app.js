@@ -90,6 +90,31 @@ function renderReasonLabel(reason) {
   return labels[reason] || "No additional renderer details were captured.";
 }
 
+function summaryFailureReason(result) {
+  const parseError =
+    result?.summary_parse_error || result?.report?.artifacts?.summary_parse_error;
+  if (typeof parseError === "string" && parseError) {
+    const lowered = parseError.toLowerCase();
+    if (
+      lowered.includes("exceed context window") ||
+      lowered.includes("requested tokens")
+    ) {
+      return "The local summary model hit its context window limit, so the app switched to the conservative fallback summary.";
+    }
+    return `The local summary model failed before verification: ${parseError}`;
+  }
+
+  const verificationNotes =
+    result?.summary_verification_notes ||
+    result?.report?.artifacts?.summary_verification_notes ||
+    result?.report?.verification?.notes ||
+    [];
+  if (verificationNotes.length) {
+    return `The generated draft did not pass verification: ${verificationNotes[0]}`;
+  }
+  return "The primary summary provider did not clear parsing or verification, so the app showed the conservative fallback summary instead.";
+}
+
 const runningProgressSteps = [
   {
     id: "quality",
@@ -376,11 +401,7 @@ function SummaryTab({ result }) {
           "article",
           { className: "note full-note" },
           h("h3", null, "Fallback summary"),
-          h(
-            "p",
-            null,
-            "The primary summary provider did not clear the safety checks, so the app showed the conservative fallback summary instead.",
-          ),
+          h("p", null, summaryFailureReason(result)),
         )
       : null,
     warnings.length
@@ -729,7 +750,7 @@ function CoachTab({ result }) {
         "p",
         null,
         artifacts.summary_fallback_used
-          ? `Provider ${label(artifacts.summary_provider || "template")} failed verification or parsing, so the fallback summary is shown.`
+          ? summaryFailureReason(result)
           : `Provider ${label(artifacts.summary_provider || "template")} generated this summary.`,
       ),
     ),

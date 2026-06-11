@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pozify import pipeline
 from pozify.contracts import ContractValidationError, UserProfile, validate_contract
 from pozify.exercise_catalog import USER_SELECTABLE_EXERCISES
+from pozify.steps.summary_provider import SummaryProviderResult
 
 
 PROFILE_INPUT = {
@@ -258,37 +259,62 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("annotated_video_path", payload_by_step["render"])
 
     def test_pipeline_falls_back_when_slm_provider_parse_fails(self) -> None:
-        with patch.dict(os.environ, {"POZIFY_SUMMARY_PROVIDER": "slm_local"}):
-            with patch("pozify.steps.summary_provider.create_summary_slm_backend") as create_backend:
-                create_backend.return_value = type(
-                    "FakeBackend",
-                    (),
-                    {
-                        "backend_name": "transformers",
-                        "model_name": "Qwen/Fake",
-                        "generate_text": lambda self, prompt: type(
-                            "BackendResult",
-                            (),
-                            {
-                                "text": "not valid json",
-                                "backend": "transformers",
-                                "model": "Qwen/Fake",
-                            },
-                        )(),
-                    },
-                )()
+        with patch.dict(os.environ, {"POZIFY_SUMMARY_PROVIDER": "slm_cloud"}):
+            with patch(
+                "pozify.steps.summary_provider.HuggingFaceCloudSummaryProvider.generate"
+            ) as generate:
+                generate.return_value = SummaryProviderResult(
+                    payload=None,
+                    provider="slm_cloud",
+                    backend="huggingface",
+                    model="Qwen/Fake",
+                    prompt_contract_version="v1",
+                    parse_ok=False,
+                    parse_error="not valid json",
+                )
                 result = pipeline.run_pipeline(
                     video_path=None, profile_input=PROFILE_INPUT, mock=True
                 )
 
         report = result["final_report"]
-        self.assertEqual(report["artifacts"]["summary_provider"], "slm_local")
+        self.assertEqual(report["artifacts"]["summary_provider"], "slm_cloud")
         self.assertFalse(report["artifacts"]["summary_parse_ok"])
+        self.assertEqual(report["artifacts"]["summary_parse_error"], "not valid json")
         self.assertTrue(report["artifacts"]["summary_fallback_used"])
         self.assertFalse(report["verification"]["passed"])
         joined_notes = " ".join(report["coach_summary"]["confidence_notes"]).lower()
-        self.assertNotIn("requires transformers", joined_notes)
         self.assertNotIn("provider failed before verification", joined_notes)
+
+    def test_pipeline_accepts_huggingface_cloud_summary_provider(self) -> None:
+        with patch.dict(os.environ, {"POZIFY_SUMMARY_PROVIDER": "slm_cloud"}):
+            with patch(
+                "pozify.steps.summary_provider.HuggingFaceCloudSummaryProvider.generate"
+            ) as generate:
+                generate.return_value = SummaryProviderResult(
+                    payload={
+                        "summary": "OK",
+                        "what_went_well": ["A"],
+                        "main_findings": ["B"],
+                        "variation_explanation": "wide_grip_push_up is not automatically an error.",
+                        "top_fixes": ["C"],
+                        "next_session_plan": ["D"],
+                        "confidence_notes": ["E"],
+                    },
+                    provider="slm_cloud",
+                    backend="huggingface",
+                    model="Qwen/Qwen2.5-3B-Instruct",
+                    prompt_contract_version="v1",
+                    parse_ok=True,
+                    raw_output='{"summary":"OK"}',
+                )
+                result = pipeline.run_pipeline(
+                    video_path=None, profile_input=PROFILE_INPUT, mock=True
+                )
+
+        report = result["final_report"]
+        self.assertEqual(report["artifacts"]["summary_provider"], "slm_cloud")
+        self.assertEqual(report["artifacts"]["summary_backend"], "huggingface")
+        self.assertEqual(report["artifacts"]["summary_model"], "Qwen/Qwen2.5-3B-Instruct")
 
     def test_contract_validation_rejects_missing_required_field(self) -> None:
         payload = {

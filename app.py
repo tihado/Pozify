@@ -233,6 +233,12 @@ def _analysis_response(result: dict[str, Any]) -> dict[str, Any]:
         "annotated_video_reason": result["final_report"]["artifacts"].get(
             "annotated_video_reason"
         ),
+        "summary_parse_error": result["final_report"]["artifacts"].get(
+            "summary_parse_error"
+        ),
+        "summary_verification_notes": result["final_report"]["artifacts"].get(
+            "summary_verification_notes"
+        ),
         "issue_thumbnail_urls": issue_thumbnail_urls,
         "issue_clip_urls": issue_clip_urls,
         "artifact_urls": _artifact_urls(result),

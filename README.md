@@ -69,54 +69,32 @@ The pose extractor is selected through a backend interface. MediaPipe is the def
 POZIFY_POSE_BACKEND=mediapipe POZIFY_MOCK_MODE=0 uv run python app.py
 ```
 
-## Open-Source SLM Summary Provider
+## SLM Summary Providers
 
-The summary stack now supports an opt-in local open-source SLM provider behind the existing
+The summary stack now uses a cloud-first provider setup behind the existing
 provider/verifier/fallback flow. The default summary provider remains `template`.
 
-To enable a real local summary model, install the optional dependencies first:
+You can run the summary path with:
 
-```bash
-uv sync --extra summary
-```
+- cloud `huggingface`
 
-This installs the Python-side runtime needed for the local SLM path, including `transformers` and
-`llama-cpp-python`. The repo already includes `torch` in the base dependencies. The first run may
-still download the configured model weights from Hugging Face if they are not already present in
-the local cache.
-
-You can run the local SLM path with either the `transformers` backend or the lighter GGUF backend.
-
-Example: `transformers` backend with Qwen 2.5 3B:
+Example: Hugging Face cloud inference with your local `HF_TOKEN`:
 
 ```bash
 POZIFY_MOCK_MODE=0 \
-POZIFY_SUMMARY_PROVIDER=slm_local \
-POZIFY_SUMMARY_BACKEND=transformers \
-POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct \
+POZIFY_SUMMARY_PROVIDER=slm_cloud \
+POZIFY_SUMMARY_CLOUD_MODEL=Qwen/Qwen2.5-3B-Instruct \
 uv run python app.py
 ```
 
-Example: GGUF backend with a quantized Qwen 2.5 3B model:
+This uses `HF_TOKEN` from your shell or local `.env`. You can also override it with
+`POZIFY_SUMMARY_API_KEY`.
+
+To discover which Hugging Face router models are currently available to your token and get 3
+recommended chat models for Pozify, run:
 
 ```bash
-POZIFY_MOCK_MODE=0 \
-POZIFY_SUMMARY_PROVIDER=slm_local \
-POZIFY_SUMMARY_BACKEND=gguf \
-POZIFY_SUMMARY_MODEL=bartowski/Qwen2.5-3B-Instruct-GGUF \
-POZIFY_SUMMARY_GGUF_FILENAME=Qwen2.5-3B-Instruct-Q4_K_M.gguf \
-uv run python app.py
-```
-
-If you already have a local GGUF file, point directly to it instead of downloading from Hugging
-Face:
-
-```bash
-POZIFY_MOCK_MODE=0 \
-POZIFY_SUMMARY_PROVIDER=slm_local \
-POZIFY_SUMMARY_BACKEND=gguf \
-POZIFY_SUMMARY_GGUF_PATH=/absolute/path/to/Qwen2.5-3B-Instruct-Q4_K_M.gguf \
-uv run python app.py
+uv run python scripts/recommend_hf_summary_models.py
 ```
 
 The model output is still treated as a draft. It must parse as valid JSON and pass the verifier.
@@ -125,32 +103,19 @@ summary path.
 
 Relevant summary environment variables:
 
-- `POZIFY_SUMMARY_PROVIDER=template|mock|unsafe_mock|slm_local`
-- `POZIFY_SUMMARY_BACKEND=transformers|gguf`
-- `POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct` for `transformers`
-- `POZIFY_SUMMARY_MODEL=bartowski/Qwen2.5-3B-Instruct-GGUF` for `gguf`
-- `POZIFY_SUMMARY_GGUF_FILENAME=Qwen2.5-3B-Instruct-Q4_K_M.gguf`
-- `POZIFY_SUMMARY_GGUF_PATH=/absolute/path/to/model.gguf`
-- `POZIFY_SUMMARY_DEVICE=cpu|mps|cuda|auto`
+- `POZIFY_SUMMARY_PROVIDER=template|mock|unsafe_mock|slm_cloud`
+- `POZIFY_SUMMARY_CLOUD_MODEL=Qwen/Qwen2.5-3B-Instruct` for Hugging Face cloud
+- `POZIFY_SUMMARY_API_KEY=...` overrides `HF_TOKEN` for cloud calls
+- `POZIFY_SUMMARY_BASE_URL=...` optional custom Hugging Face-compatible endpoint
 - `POZIFY_SUMMARY_MAX_TOKENS=512`
 - `POZIFY_SUMMARY_TEMPERATURE=0.2`
-- `POZIFY_SUMMARY_CONTEXT_WINDOW=4096`
-- `POZIFY_SUMMARY_THREADS=0`
-- `POZIFY_SUMMARY_GPU_LAYERS=0`
-
-For stability on Apple Silicon, the local summary backend defaults to `POZIFY_SUMMARY_DEVICE=cpu`.
-This avoids common MPS out-of-memory failures during summary generation. If you explicitly want to
-try Metal acceleration, set `POZIFY_SUMMARY_DEVICE=mps`.
-
-For the GGUF backend, `POZIFY_SUMMARY_DEVICE` does not apply. Use `POZIFY_SUMMARY_GPU_LAYERS` if
-your local `llama-cpp-python` build supports GPU offload.
 
 To verify that the run actually used the SLM provider, inspect the `JSON` tab or
 `summary_generation.json` and confirm:
 
-- `summary_provider` is `slm_local`
-- `summary_backend` is `transformers` or `gguf`
-- `summary_model` matches your configured model or GGUF repo/file pair
+- `summary_provider` is `slm_cloud`
+- `summary_backend` is `huggingface`
+- `summary_model` matches your configured cloud model
 
 If you instead see:
 
@@ -160,14 +125,14 @@ If you instead see:
 "summary_model": null
 ```
 
-then the app did not receive `POZIFY_SUMMARY_PROVIDER=slm_local` and stayed on the default
+then the app did not receive `POZIFY_SUMMARY_PROVIDER=slm_cloud` and stayed on the default
 template provider.
 
 Common fixes:
 
 1. Stop the running app process completely.
 2. Start it again from the same terminal with the full command above.
-3. Ensure the optional dependencies are installed with `uv sync --extra summary`.
+3. Ensure `HF_TOKEN` is present in your shell or local `.env`.
 4. Re-run the analysis and check `summary_generation.json` again.
 
 Backend implementations live in `src/pozify/steps/pose_backends/` and return the same
