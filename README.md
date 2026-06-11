@@ -191,11 +191,46 @@ Recommended replacement order:
 6. `annotated_renderer.py`: render skeleton overlays and issue highlights.
 7. `coach_summary.py`: call the selected small language model with retrieved knowledge cards.
 
+## Exercise Router Training
+
+Issue 4 adds a real exercise router path for `squat`, `push_up`, `shoulder_press`, and `unknown`.
+Runtime inference stays local: `src/pozify/steps/exercise_classifier.py` looks for a trained artifact
+under `models/exercise_router/active/` and falls back to `unknown` with `fallback_required=true`
+when no model is present or confidence is too low.
+
+Modal is used for dataset ingestion, batch feature extraction, and training:
+
+```bash
+uv run modal setup
+uv run modal run scripts/exercise_router_modal.py --stage ingest
+uv run modal run scripts/exercise_router_modal.py --stage features
+uv run modal run scripts/exercise_router_modal.py --stage train-baseline
+uv run modal run scripts/exercise_router_modal.py --stage train-temporal
+uv run modal run scripts/exercise_router_modal.py --stage evaluate
+```
+
+The Modal app uses:
+
+- `pozify-router-data` for raw videos, manifests, and feature caches.
+- `pozify-router-models` for `baseline.joblib`, `temporal.pt`, `evaluation.json`, and the selected
+  `router.joblib`.
+
+Download the selected baseline artifact after evaluation and place it at:
+
+```text
+models/exercise_router/active/router.joblib
+```
+
+Custom unknown clips can be uploaded into the data volume at `/data/raw/custom_unknown/` before the
+`features` stage. Use consented clips only; useful unknown examples include idle standing, walking
+into frame, setup motion, stretching, bad camera angle, and partial/unsupported reps. Unsupported
+classes from the Riccio dataset, such as bicep curl, are mapped to `unknown`.
+
 ## Development Checks
 
 ```bash
 uv run python -m unittest discover -s tests
-python3 -m py_compile app.py src/pozify/*.py src/pozify/steps/*.py
+python3 -m py_compile app.py src/pozify/*.py src/pozify/steps/*.py src/pozify/ml/*.py scripts/*.py
 uv run python -c "import app; from pozify.pipeline import run_pipeline; print('ok')"
 ```
 
