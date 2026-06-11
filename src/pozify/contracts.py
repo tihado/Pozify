@@ -133,9 +133,10 @@ class IssueMarkers:
 @dataclass(frozen=True)
 class CoachSummary:
     summary: str
-    what_went_well: list[str]
-    main_findings: list[str]
-    variation_explanation: str
+    what_you_did: list[str]
+    what_looked_good: list[str]
+    what_changed_across_reps: list[str]
+    valid_variation_vs_issue: list[str]
     top_fixes: list[str]
     next_session_plan: list[str]
     confidence_notes: list[str]
@@ -494,9 +495,10 @@ def _validate_coach_summary(value: Any, path: str) -> None:
         payload,
         {
             "summary",
-            "what_went_well",
-            "main_findings",
-            "variation_explanation",
+            "what_you_did",
+            "what_looked_good",
+            "what_changed_across_reps",
+            "valid_variation_vs_issue",
             "top_fixes",
             "next_session_plan",
             "confidence_notes",
@@ -504,9 +506,16 @@ def _validate_coach_summary(value: Any, path: str) -> None:
         path,
     )
     _require_type(payload["summary"], str, f"{path}.summary")
-    _require_string_list(payload["what_went_well"], f"{path}.what_went_well")
-    _require_string_list(payload["main_findings"], f"{path}.main_findings")
-    _require_type(payload["variation_explanation"], str, f"{path}.variation_explanation")
+    _require_string_list(payload["what_you_did"], f"{path}.what_you_did")
+    _require_string_list(payload["what_looked_good"], f"{path}.what_looked_good")
+    _require_string_list(
+        payload["what_changed_across_reps"],
+        f"{path}.what_changed_across_reps",
+    )
+    _require_string_list(
+        payload["valid_variation_vs_issue"],
+        f"{path}.valid_variation_vs_issue",
+    )
     _require_string_list(payload["top_fixes"], f"{path}.top_fixes")
     _require_string_list(payload["next_session_plan"], f"{path}.next_session_plan")
     _require_string_list(payload["confidence_notes"], f"{path}.confidence_notes")

@@ -334,7 +334,12 @@ function SummaryTab({ result }) {
     h(
       "div",
       { className: "note-grid" },
-      h(NoteList, { title: "What went well", items: summary.what_went_well }),
+      h(NoteList, { title: "What you did", items: summary.what_you_did }),
+      h(NoteList, { title: "What looked good", items: summary.what_looked_good }),
+      h(NoteList, {
+        title: "What changed across reps",
+        items: summary.what_changed_across_reps,
+      }),
       h(NoteList, { title: "Top fixes", items: summary.top_fixes }),
       h(NoteList, { title: "Next session", items: summary.next_session_plan }),
     ),
@@ -648,27 +653,58 @@ function CoachTab({ result }) {
       h("p", null, "Coach notes appear after analysis."),
     );
   const summary = result.report.coach_summary;
+  const coachArtifacts = result.report.artifacts || {};
+  const coachSource = coachArtifacts.coach_summary_source || "";
+  const coachProvider = coachArtifacts.coach_summary_provider || "n/a";
+  const coachModel = coachArtifacts.coach_summary_model || "n/a";
+  const verifierBypassed = Boolean(
+    coachArtifacts.coach_summary_verifier_bypassed,
+  );
   return h(
     "section",
     { className: "summary" },
     h("h2", null, "Coach summary"),
+    h(
+      "div",
+      { className: "stat-grid" },
+      [
+        ["Provider", coachProvider],
+        ["Model", coachModel],
+        ["Source", coachSource || "n/a"],
+      ].map(([name, value]) =>
+        h(
+          "div",
+          { className: "stat", key: name },
+          h("span", null, name),
+          h("strong", null, value),
+        ),
+      ),
+    ),
+    coachSource.startsWith("fallback")
+      ? h("p", null, "A conservative fallback summary was used because the generated summary was unavailable or did not pass verification.")
+      : null,
+    verifierBypassed
+      ? h("p", null, "Verifier bypass is active, so the model summary is shown even though verification did not pass.")
+      : null,
     h("p", null, summary.summary),
     h(
       "div",
       { className: "note-grid" },
-      h(NoteList, { title: "Main findings", items: summary.main_findings }),
+      h(NoteList, { title: "What you did", items: summary.what_you_did }),
+      h(NoteList, {
+        title: "Variation vs issue",
+        items: summary.valid_variation_vs_issue,
+      }),
       h(NoteList, { title: "Top fixes", items: summary.top_fixes }),
       h(NoteList, {
         title: "Confidence notes",
         items: summary.confidence_notes,
       }),
     ),
-    h(
-      "article",
-      { className: "note full-note" },
-      h("h3", null, "Variation context"),
-      h("p", null, summary.variation_explanation),
-    ),
+    h(NoteList, {
+      title: "Next session plan",
+      items: summary.next_session_plan,
+    }),
   );
 }
 
@@ -773,6 +809,7 @@ function App() {
   const [variation, setVariation] = useState("");
   const [equipment, setEquipment] = useState("bodyweight");
   const [limitations, setLimitations] = useState([]);
+  const [bypassVerifier, setBypassVerifier] = useState(false);
   const [result, setResult] = useState(null);
   const [activeTab, setActiveTab] = useState("summary");
   const [status, setStatus] = useState("idle");
@@ -820,6 +857,7 @@ function App() {
     payload.append("intended_variation", variation);
     payload.append("limitations", JSON.stringify(limitations));
     payload.append("equipment", equipment);
+    payload.append("bypass_verifier", String(bypassVerifier));
 
     try {
       const response = await fetch("/api/analyze/stream", {
@@ -990,6 +1028,21 @@ function App() {
                   h("span", null, label(item)),
                 ),
               ),
+            ),
+          ),
+          h(
+            "div",
+            { className: "field full" },
+            h("span", { className: "label" }, "Advanced"),
+            h(
+              "label",
+              { className: "check-chip" },
+              h("input", {
+                type: "checkbox",
+                checked: bypassVerifier,
+                onChange: () => setBypassVerifier((current) => !current),
+              }),
+              h("span", null, "Bypass verifier and show model output"),
             ),
           ),
         ),

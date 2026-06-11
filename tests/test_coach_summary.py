@@ -1,0 +1,384 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from pozify.contracts import (
+    CoachSummary,
+    ExerciseClassification,
+    IssueMarker,
+    IssueMarkers,
+    Rep,
+    RepAnalysis,
+    RepAnalysisItem,
+    Reps,
+    UserProfile,
+    Variation,
+)
+from pozify.env import load_local_env
+from pozify.knowledge_cards import retrieve_cards
+from pozify.steps import coach_summary, coach_summary_fallback, verifier
+
+
+class _BadModel:
+    def generate_summary(self, prompt: str):
+        del prompt
+        raise RuntimeError("synthetic model failure")
+
+
+class _GoodModel:
+    def generate_summary(self, prompt: str):
+        del prompt
+        from pozify.slm.providers import CoachSummaryGeneration
+
+        return CoachSummaryGeneration(
+            text=(
+                '{"summary":"Structured summary.","what_you_did":["You completed 2 `push_up` reps."],'
+                '"what_looked_good":["Tempo looked steady."],'
+                '"what_changed_across_reps":["Later reps drifted into `hip_sag`."],'
+                '"valid_variation_vs_issue":["The detected variation was `wide_grip_push_up` with `wide_hand_placement` as context."],'
+                '"top_fixes":["Keep the hips in line through the later reps."],'
+                '"next_session_plan":["Repeat the set with slower reps."],'
+                '"confidence_notes":["Confidence is limited."]}'
+            ),
+            provider="hf_inference",
+            model="Qwen/Qwen2.5-7B-Instruct",
+        )
+
+
+def _profile() -> UserProfile:
+    return UserProfile(
+        goal="beginner_practice",
+        experience_level="beginner",
+        intended_exercise="push_up",
+        intended_variation=None,
+        known_limitations=[],
+        equipment="bodyweight",
+    )
+
+
+def _classification() -> ExerciseClassification:
+    return ExerciseClassification(
+        exercise="push_up",
+        confidence=0.66,
+        window_predictions=[],
+        fallback_required=False,
+    )
+
+
+def _reps() -> Reps:
+    return Reps(
+        exercise="push_up",
+        reps=[
+            Rep(1, 0, 10, 20, 0.0, 0.33, 0.67),
+            Rep(2, 21, 30, 40, 0.7, 1.0, 1.33),
+        ],
+        partial_reps=[],
+    )
+
+
+def _analysis() -> RepAnalysis:
+    return RepAnalysis(
+        exercise="push_up",
+        items=[
+            RepAnalysisItem(
+                rep_id=1,
+                duration_sec=0.67,
+                range_of_motion_score=0.82,
+                stability_score=0.84,
+                symmetry_score=0.88,
+                metrics={"body_line_score": 0.9},
+                variation_hints=["wide_grip_push_up"],
+            ),
+            RepAnalysisItem(
+                rep_id=2,
+                duration_sec=0.63,
+                range_of_motion_score=0.68,
+                stability_score=0.71,
+                symmetry_score=0.82,
+                metrics={"body_line_score": 0.6},
+                variation_hints=["wide_grip_push_up"],
+            ),
+        ],
+        aggregate_metrics={
+            "avg_rom_score": 0.75,
+            "avg_stability_score": 0.78,
+            "avg_symmetry_score": 0.85,
+            "fatigue_trend_rom_delta": -0.12,
+            "pose_valid_ratio": 0.79,
+        },
+    )
+
+
+def _variation() -> Variation:
+    return Variation(
+        exercise="push_up",
+        detected_variation="wide_grip_push_up",
+        variation_confidence=0.68,
+        not_issues=["wide_hand_placement"],
+    )
+
+
+def _issues() -> IssueMarkers:
+    return IssueMarkers(
+        issues=[
+            IssueMarker(
+                rep_id=2,
+                issue="hip_sag",
+                severity=0.82,
+                start_frame=24,
+                end_frame=31,
+                start_sec=0.8,
+                end_sec=1.03,
+                affected_joints=["left_hip", "right_hip"],
+                evidence={"body_line_score": 0.59, "confidence": 0.82},
+            )
+        ]
+    )
+
+
+class CoachSummaryTests(unittest.TestCase):
+    def test_load_local_env_populates_missing_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_path = Path(temp_dir) / ".env"
+            env_path.write_text(
+                "HF_TOKEN=test-token\nPOZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen2.5-7B-Instruct\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {}, clear=True):
+                current = Path.cwd()
+                try:
+                    os.chdir(temp_dir)
+                    load_local_env()
+                finally:
+                    os.chdir(current)
+
+                self.assertEqual(os.getenv("HF_TOKEN"), "test-token")
+                self.assertEqual(
+                    os.getenv("POZIFY_COACH_SUMMARY_MODEL"),
+                    "Qwen/Qwen2.5-7B-Instruct",
+                )
+
+    def test_card_retrieval_is_deterministic_and_grounded(self) -> None:
+        cards = retrieve_cards(
+            profile=_profile(),
+            classification=_classification(),
+            variation=_variation(),
+            issues=_issues(),
+        )
+
+        card_ids = [card.card_id for card in cards]
+        self.assertEqual(
+            card_ids[:4],
+            [
+                "exercise:push_up",
+                "variation:wide_grip_push_up",
+                "issue:hip_sag",
+                "goal:beginner_practice",
+            ],
+        )
+        self.assertIn("safety:no_diagnosis", card_ids)
+
+    def test_coach_summary_falls_back_when_model_fails(self) -> None:
+        cards = retrieve_cards(
+            profile=_profile(),
+            classification=_classification(),
+            variation=_variation(),
+            issues=_issues(),
+        )
+
+        summary = coach_summary.run(
+            _profile(),
+            _classification(),
+            _reps(),
+            _analysis(),
+            _variation(),
+            _issues(),
+            cards=cards,
+            model=_BadModel(),
+        )
+
+        self.assertTrue(summary.confidence_notes)
+        self.assertIn("Fallback summary was used", " ".join(summary.confidence_notes))
+        self.assertIn("`wide_grip_push_up`", " ".join(summary.valid_variation_vs_issue))
+
+    def test_coach_summary_metadata_includes_provider_and_model(self) -> None:
+        result = coach_summary.run_with_metadata(
+            _profile(),
+            _classification(),
+            _reps(),
+            _analysis(),
+            _variation(),
+            _issues(),
+            cards=retrieve_cards(
+                profile=_profile(),
+                classification=_classification(),
+                variation=_variation(),
+                issues=_issues(),
+            ),
+            model=_GoodModel(),
+        )
+
+        self.assertEqual(result.provider, "hf_inference")
+        self.assertEqual(result.model, "Qwen/Qwen2.5-7B-Instruct")
+        self.assertEqual(result.source, "model_or_local")
+
+    def test_verifier_rejects_issue_not_in_json(self) -> None:
+        summary = CoachSummary(
+            summary="The strongest issue was `incomplete_depth`.",
+            what_you_did=["You completed 2 `push_up` reps."],
+            what_looked_good=["Tempo looked steady."],
+            what_changed_across_reps=["Later reps lost range."],
+            valid_variation_vs_issue=["The detected variation was `wide_grip_push_up`."],
+            top_fixes=["Address `incomplete_depth` first."],
+            next_session_plan=["Repeat the set with slower reps."],
+            confidence_notes=["Confidence is limited."],
+        )
+
+        result = verifier.run(
+            summary,
+            _issues(),
+            _variation(),
+            classification=_classification(),
+            analysis=_analysis(),
+            reps=_reps(),
+        )
+
+        self.assertFalse(result.passed)
+        self.assertFalse(result.checks["no_issue_outside_json"])
+
+    def test_verifier_rejects_diagnosis_and_variation_overcorrection(self) -> None:
+        summary = CoachSummary(
+            summary="This `wide_grip_push_up` pattern shows a shoulder injury risk.",
+            what_you_did=["You completed 2 `push_up` reps."],
+            what_looked_good=["The set started under control."],
+            what_changed_across_reps=["Later reps drifted into `hip_sag`."],
+            valid_variation_vs_issue=[
+                "Your `wide_grip_push_up` with `wide_hand_placement` is a problem "
+                "that should be fixed."
+            ],
+            top_fixes=["Correct `wide_hand_placement` before anything else."],
+            next_session_plan=["Repeat the set."],
+            confidence_notes=["Confidence is limited."],
+        )
+
+        result = verifier.run(
+            summary,
+            _issues(),
+            _variation(),
+            classification=_classification(),
+            analysis=_analysis(),
+            reps=_reps(),
+        )
+
+        self.assertFalse(result.passed)
+        self.assertFalse(result.checks["variation_not_overcorrected"])
+        self.assertFalse(result.checks["no_diagnosis"])
+
+    def test_fallback_summary_does_not_false_positive_on_issue_marker_phrase(self) -> None:
+        summary = coach_summary_fallback.build_fallback_summary(
+            profile=_profile(),
+            classification=ExerciseClassification(
+                exercise="squat",
+                confidence=0.92,
+                window_predictions=[],
+                fallback_required=False,
+            ),
+            reps=Reps(
+                exercise="squat",
+                reps=[Rep(1, 0, 10, 20, 0.0, 0.33, 0.67)],
+                partial_reps=[],
+            ),
+            analysis=RepAnalysis(
+                exercise="squat",
+                items=[],
+                aggregate_metrics={
+                    "avg_rom_score": 0.57,
+                    "avg_stability_score": 0.68,
+                    "avg_symmetry_score": 0.56,
+                    "fatigue_trend_rom_delta": -0.10,
+                    "pose_valid_ratio": 0.93,
+                },
+            ),
+            variation=Variation(
+                exercise="squat",
+                detected_variation="wide_squat_stance",
+                variation_confidence=0.82,
+                not_issues=["wide_stance"],
+            ),
+            issues=IssueMarkers(
+                issues=[
+                    IssueMarker(
+                        rep_id=1,
+                        issue="shallow_depth",
+                        severity=0.81,
+                        start_frame=10,
+                        end_frame=14,
+                        start_sec=0.33,
+                        end_sec=0.46,
+                        affected_joints=["left_hip", "right_hip"],
+                        evidence={"confidence": 0.81},
+                    )
+                ]
+            ),
+            cards=[],
+        )
+
+        result = verifier.run(
+            summary,
+            IssueMarkers(
+                issues=[
+                    IssueMarker(
+                        rep_id=1,
+                        issue="shallow_depth",
+                        severity=0.81,
+                        start_frame=10,
+                        end_frame=14,
+                        start_sec=0.33,
+                        end_sec=0.46,
+                        affected_joints=["left_hip", "right_hip"],
+                        evidence={"confidence": 0.81},
+                    )
+                ]
+            ),
+            Variation(
+                exercise="squat",
+                detected_variation="wide_squat_stance",
+                variation_confidence=0.82,
+                not_issues=["wide_stance"],
+            ),
+            classification=ExerciseClassification(
+                exercise="squat",
+                confidence=0.92,
+                window_predictions=[],
+                fallback_required=False,
+            ),
+            analysis=RepAnalysis(
+                exercise="squat",
+                items=[],
+                aggregate_metrics={
+                    "avg_rom_score": 0.57,
+                    "avg_stability_score": 0.68,
+                    "avg_symmetry_score": 0.56,
+                    "fatigue_trend_rom_delta": -0.10,
+                    "pose_valid_ratio": 0.93,
+                },
+            ),
+            reps=Reps(
+                exercise="squat",
+                reps=[Rep(1, 0, 10, 20, 0.0, 0.33, 0.67)],
+                partial_reps=[],
+            ),
+        )
+
+        self.assertTrue(result.checks["variation_not_overcorrected"])
+
+
+if __name__ == "__main__":
+    unittest.main()
