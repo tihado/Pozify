@@ -208,19 +208,41 @@ def run_pipeline(
         "I am turning the scan into coaching notes you can use right away.",
     )
     analysis_mode = "mock" if mock_mode else "real"
-    mock_steps = [
-        "coach_summary",
-        "verifier",
-    ]
+    mock_steps: list[str] = []
     if mock_mode:
         mock_steps.insert(0, "exercise_classifier")
 
-    summary = coach_summary.run(
-        profile, classification, reps, analysis, variation, issues
+    draft_summary = coach_summary.run(
+        profile, classification, reps, analysis, variation, issues, mock_steps=mock_steps
     )
-    write_artifact("coach_summary.json", summary)
 
-    verification = verifier.run(summary, issues, variation)
+    verification = verifier.run(
+        draft_summary,
+        issues,
+        variation,
+        classification,
+        mock_steps=mock_steps,
+    )
+    if verification.passed:
+        summary = draft_summary
+    else:
+        summary = coach_summary.build_fallback(
+            profile,
+            classification,
+            reps,
+            analysis,
+            variation,
+            issues,
+            verification_notes=[*verification.notes, "Conservative fallback summary returned."],
+            mock_steps=mock_steps,
+        )
+        verification = type(verification)(
+            passed=False,
+            checks=verification.checks,
+            notes=[*verification.notes, "Conservative fallback summary returned."],
+        )
+
+    write_artifact("coach_summary.json", summary)
     write_artifact("verification.json", verification)
     emit(
         "coach",
