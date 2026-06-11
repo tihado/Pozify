@@ -65,6 +65,67 @@ def _cards_by_type(context: dict[str, Any], card_type: str) -> list[dict[str, An
     return [card for card in context["knowledge_cards"] if card["type"] == card_type]
 
 
+def _issue_summary_and_card(
+    issues: list[dict[str, Any]],
+    issue_cards: list[dict[str, Any]],
+) -> tuple[str, dict[str, Any] | None]:
+    if not issues:
+        return "No issue interval labels were emitted from the current issue marker step.", None
+
+    issue_counts: dict[str, int] = {}
+    for issue in issues:
+        issue_counts[issue["issue"]] = issue_counts.get(issue["issue"], 0) + 1
+    main_issue, main_issue_count = sorted(
+        issue_counts.items(), key=lambda item: (-item[1], item[0])
+    )[0]
+    issue_summary = (
+        f"The main marked issue is `{main_issue}`, appearing in {main_issue_count} interval(s)."
+    )
+    top_issue_card = next((card for card in issue_cards if card["label"] == main_issue), None)
+    return issue_summary, top_issue_card
+
+
+def _build_top_fixes(
+    top_issue_card: dict[str, Any] | None,
+    exercise_cards: list[dict[str, Any]],
+    goal_cards: list[dict[str, Any]],
+) -> list[str]:
+    top_fixes: list[str] = []
+    if top_issue_card is not None:
+        top_fixes.extend(top_issue_card["coaching_cues"][:2])
+    if not top_fixes and exercise_cards:
+        top_fixes.extend(exercise_cards[0]["coaching_cues"][:2])
+    if goal_cards:
+        top_fixes.extend(goal_cards[0]["coaching_cues"][:1])
+    return top_fixes[:3] or [
+        "Keep the camera angle consistent so the next review is easier to compare.",
+        "Use a slightly slower tempo on the next set to make each rep easier to inspect.",
+    ]
+
+
+def _build_confidence_notes(context: dict[str, Any]) -> list[str]:
+    confidence_notes = []
+    if context["mock_steps"]:
+        confidence_notes.append(
+            "Some downstream interpretation steps still use placeholders: "
+            + ", ".join(context["mock_steps"])
+            + "."
+        )
+    if context["exercise"]["confidence"] < 0.95:
+        confidence_notes.append(
+            f"Exercise routing confidence is {context['exercise']['confidence']:.0%}, so treat the coaching language conservatively."
+        )
+    if context["retrieval_trace"]["missing_labels"]:
+        confidence_notes.append(
+            "Some knowledge cards were not available for: "
+            + ", ".join(context["retrieval_trace"]["missing_labels"])
+            + "."
+        )
+    if not confidence_notes:
+        confidence_notes.append("Summary grounded cleanly in the current structured artifacts.")
+    return confidence_notes
+
+
 def _extract_json_object(text: str) -> dict[str, Any]:
     decoder = json.JSONDecoder()
     for index, char in enumerate(text):
@@ -169,58 +230,15 @@ class TemplateSummaryProvider:
             if variation_cards
             else f"The variation label for this run is `{variation['label']}`."
         )
-
-        if issues:
-            issue_counts: dict[str, int] = {}
-            for issue in issues:
-                issue_counts[issue["issue"]] = issue_counts.get(issue["issue"], 0) + 1
-            main_issue, main_issue_count = sorted(
-                issue_counts.items(), key=lambda item: (-item[1], item[0])
-            )[0]
-            issue_summary = (
-                f"The main marked issue is `{main_issue}`, appearing in {main_issue_count} interval(s)."
-            )
-            top_issue_card = next((card for card in issue_cards if card["label"] == main_issue), None)
-        else:
-            issue_summary = "No issue interval labels were emitted from the current issue marker step."
-            top_issue_card = None
+        issue_summary, top_issue_card = _issue_summary_and_card(issues, issue_cards)
 
         partial_rep_note = (
             f" The pipeline also flagged {len(partial_reps)} partial rep(s)."
             if partial_reps
             else ""
         )
-        top_fixes = []
-        if top_issue_card is not None:
-            top_fixes.extend(top_issue_card["coaching_cues"][:2])
-        if not top_fixes and exercise_cards:
-            top_fixes.extend(exercise_cards[0]["coaching_cues"][:2])
-        if goal_cards:
-            top_fixes.extend(goal_cards[0]["coaching_cues"][:1])
-        top_fixes = top_fixes[:3] or [
-            "Keep the camera angle consistent so the next review is easier to compare.",
-            "Use a slightly slower tempo on the next set to make each rep easier to inspect.",
-        ]
-
-        confidence_notes = []
-        if context["mock_steps"]:
-            confidence_notes.append(
-                "Some downstream interpretation steps still use placeholders: "
-                + ", ".join(context["mock_steps"])
-                + "."
-            )
-        if context["exercise"]["confidence"] < 0.95:
-            confidence_notes.append(
-                f"Exercise routing confidence is {context['exercise']['confidence']:.0%}, so treat the coaching language conservatively."
-            )
-        if context["retrieval_trace"]["missing_labels"]:
-            confidence_notes.append(
-                "Some knowledge cards were not available for: "
-                + ", ".join(context["retrieval_trace"]["missing_labels"])
-                + "."
-            )
-        if not confidence_notes:
-            confidence_notes.append("Summary grounded cleanly in the current structured artifacts.")
+        top_fixes = _build_top_fixes(top_issue_card, exercise_cards, goal_cards)
+        confidence_notes = _build_confidence_notes(context)
 
         payload = {
             "summary": (

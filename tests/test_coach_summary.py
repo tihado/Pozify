@@ -97,6 +97,51 @@ class CoachSummaryTests(unittest.TestCase):
         self.assertFalse(draft.generation.parse_ok)
         self.assertEqual(draft.generation.provider, "slm_local")
 
+    def test_fallback_hides_internal_provider_error_from_confidence_notes(self) -> None:
+        profile, classification, reps, analysis, variation, issues = self._inputs()
+        fallback = coach_summary.build_fallback(
+            profile,
+            classification,
+            reps,
+            analysis,
+            variation,
+            issues,
+            verification_notes=[
+                "Summary provider failed before verification.",
+                "The local SLM summary backend requires transformers. Install the optional summary dependencies before using POZIFY_SUMMARY_PROVIDER=slm_local.",
+                "Conservative fallback summary returned.",
+            ],
+            mock_steps=[],
+        )
+
+        joined = " ".join(fallback.confidence_notes).lower()
+        self.assertNotIn("requires transformers", joined)
+        self.assertNotIn("provider failed before verification", joined)
+        self.assertIn("fallback summary", joined)
+
+    def test_fallback_hides_mps_out_of_memory_details_from_confidence_notes(self) -> None:
+        profile, classification, reps, analysis, variation, issues = self._inputs()
+        fallback = coach_summary.build_fallback(
+            profile,
+            classification,
+            reps,
+            analysis,
+            variation,
+            issues,
+            verification_notes=[
+                "Summary provider failed before verification.",
+                "MPS backend out of memory (MPS allocated: 6.70 GiB, other allocations: 5.70 GiB, max allowed: 9.07 GiB). Tried to allocate 26.79 MiB on private pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+                "Conservative fallback summary returned.",
+            ],
+            mock_steps=[],
+        )
+
+        joined = " ".join(fallback.confidence_notes).lower()
+        self.assertNotIn("out of memory", joined)
+        self.assertNotIn("mps backend", joined)
+        self.assertNotIn("tried to allocate", joined)
+        self.assertIn("fallback summary", joined)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,6 +22,24 @@ class SummaryDraft:
     generation: SummaryGeneration
 
 
+def _user_visible_fallback_notes(verification_notes: list[str]) -> list[str]:
+    visible_notes: list[str] = []
+    hidden_fragments = (
+        "requires transformers",
+        "provider failed before verification",
+        "out of memory",
+        "mps backend",
+        "tried to allocate",
+        "high_watermark_ratio",
+    )
+    for note in verification_notes:
+        lowered = note.lower()
+        if any(fragment in lowered for fragment in hidden_fragments):
+            continue
+        visible_notes.append(note)
+    return visible_notes
+
+
 def generate(
     profile: UserProfile,
     classification: ExerciseClassification,
@@ -109,6 +127,12 @@ def build_fallback(
         if issue_labels
         else "No issue labels were emitted from the current issue marker step."
     )
+    visible_notes = _user_visible_fallback_notes(verification_notes)
+    if not visible_notes:
+        visible_notes = [
+            "The primary summary model could not be used safely for this run.",
+            "A conservative fallback summary was returned instead.",
+        ]
     return CoachSummary(
         summary=(
             f"The pipeline observed {len(reps.reps)} {classification.exercise} rep(s) and the variation label "
@@ -136,7 +160,7 @@ def build_fallback(
             "Use a slower tempo if you want cleaner evidence for the next comparison.",
         ],
         confidence_notes=[
-            *verification_notes,
+            *visible_notes,
             f"Classifier confidence for this run is {classification.confidence:.0%}.",
             (
                 "Some steps still use placeholders: " + ", ".join(mock_steps)

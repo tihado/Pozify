@@ -47,10 +47,24 @@ class TransformersSummaryBackend:
         self.model_name = model_name or os.getenv(
             "POZIFY_SUMMARY_MODEL", "Qwen/Qwen2.5-3B-Instruct"
         )
+        self.device = os.getenv("POZIFY_SUMMARY_DEVICE", "cpu").strip().lower()
         self.max_tokens = _env_int("POZIFY_SUMMARY_MAX_TOKENS", 512)
         self.temperature = _env_float("POZIFY_SUMMARY_TEMPERATURE", 0.2)
         self._generator = None
         self._tokenizer = None
+
+    def _pipeline_device(self) -> int | str | None:
+        if self.device == "cpu":
+            return -1
+        if self.device == "mps":
+            return "mps"
+        if self.device == "cuda":
+            return 0
+        if self.device == "auto":
+            return None
+        raise RuntimeError(
+            "Unsupported POZIFY_SUMMARY_DEVICE value. Use one of: cpu, mps, cuda, auto."
+        )
 
     def _load(self) -> None:
         if self._generator is not None:
@@ -65,12 +79,16 @@ class TransformersSummaryBackend:
             ) from exc
 
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self._generator = pipeline(
-            "text-generation",
-            model=self.model_name,
-            tokenizer=self._tokenizer,
-            trust_remote_code=True,
-        )
+        pipeline_kwargs = {
+            "task": "text-generation",
+            "model": self.model_name,
+            "tokenizer": self._tokenizer,
+            "trust_remote_code": True,
+        }
+        device = self._pipeline_device()
+        if device is not None:
+            pipeline_kwargs["device"] = device
+        self._generator = pipeline(**pipeline_kwargs)
 
     def _prompt_text(self, prompt: str) -> str:
         self._load()

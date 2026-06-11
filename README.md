@@ -37,6 +37,11 @@ uv run gradio app.py
 
 The app runs at `http://127.0.0.1:7860` by default.
 
+For in-browser playback of `annotated_video.mp4` and issue clips, the machine should have `ffmpeg`
+or another H.264-capable encoder available. Without that, Pozify can still render thumbnails and
+analysis artifacts, but the UI will mark video playback as unavailable instead of showing a broken
+player.
+
 The pipeline runs with real pose extraction by default when a video path is provided. No-video runs
 default to mock mode. To force mock mode in scripts, call `run_pipeline(..., mock=True)` or set:
 
@@ -98,8 +103,13 @@ Relevant summary environment variables:
 - `POZIFY_SUMMARY_PROVIDER=template|mock|unsafe_mock|slm_local`
 - `POZIFY_SUMMARY_BACKEND=transformers`
 - `POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct`
+- `POZIFY_SUMMARY_DEVICE=cpu|mps|cuda|auto`
 - `POZIFY_SUMMARY_MAX_TOKENS=512`
 - `POZIFY_SUMMARY_TEMPERATURE=0.2`
+
+For stability on Apple Silicon, the local summary backend defaults to `POZIFY_SUMMARY_DEVICE=cpu`.
+This avoids common MPS out-of-memory failures during summary generation. If you explicitly want to
+try Metal acceleration, set `POZIFY_SUMMARY_DEVICE=mps`.
 
 To verify that the run actually used the SLM provider, inspect the `JSON` tab or
 `summary_generation.json` and confirm:

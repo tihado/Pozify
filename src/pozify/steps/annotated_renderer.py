@@ -28,7 +28,8 @@ SKELETON_EDGES = [
     ("right_knee", "right_ankle"),
 ]
 
-PREFERRED_VIDEO_CODECS = ("mp4v", "avc1", "H264")
+PREFERRED_VIDEO_CODECS = ("avc1", "H264", "mp4v")
+BROWSER_PLAYABLE_CODECS = {"avc1", "H264"}
 HDR_TRANSFERS = {"arib-std-b67", "smpte2084"}
 HDR_PRIMARIES = {"bt2020"}
 BT709_COLOR_ARGS = (
@@ -612,6 +613,12 @@ def _open_video_writer(
     return None, None
 
 
+def _browser_compatible_output(codec: str | None, ffmpeg_available: bool) -> bool:
+    if ffmpeg_available:
+        return True
+    return codec in BROWSER_PLAYABLE_CODECS
+
+
 def run(
     manifest: VideoManifest,
     pose_sequence: PoseSequence,
@@ -666,8 +673,9 @@ def run(
         )
 
     output_path = run_dir / "annotated_video.mp4"
-    raw_output_path = run_dir / "annotated_video_raw.mp4" if _tool_path("ffmpeg") else output_path
-    writer, _codec = _open_video_writer(raw_output_path, fps, width, height)
+    ffmpeg_available = _tool_path("ffmpeg") is not None
+    raw_output_path = run_dir / "annotated_video_raw.mp4" if ffmpeg_available else output_path
+    writer, codec = _open_video_writer(raw_output_path, fps, width, height)
     if writer is None:
         capture.release()
         for temporary_path in temporary_paths:
@@ -740,16 +748,24 @@ def run(
             raw_output_path.replace(output_path)
         raw_output_path.unlink(missing_ok=True)
 
-    return RenderArtifacts(
-        annotated_video_path=str(output_path),
-        issue_thumbnail_paths=issue_thumbnail_paths,
-        issue_clip_paths=_issue_clip_paths(
+    browser_compatible = _browser_compatible_output(codec, ffmpeg_available)
+    issue_clip_paths = (
+        _issue_clip_paths(
             output_path,
             issues,
             run_dir,
             fps,
             width,
             height,
-        ),
-        status="ok",
+        )
+        if browser_compatible
+        else []
+    )
+
+    return RenderArtifacts(
+        annotated_video_path=str(output_path) if browser_compatible else None,
+        issue_thumbnail_paths=issue_thumbnail_paths,
+        issue_clip_paths=issue_clip_paths,
+        status="ok" if browser_compatible else "browser_incompatible_codec",
+        reason=None if browser_compatible else "renderer_browser_playback_requires_ffmpeg_or_h264",
     )

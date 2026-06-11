@@ -24,6 +24,43 @@ RUNS_DIR = Path("runs")
 ProgressCallback = Callable[[dict[str, Any]], None]
 
 
+def _verification_for_provider_failure(summary_generation: SummaryGeneration) -> Verification:
+    return Verification(
+        passed=False,
+        checks={
+            "provider_payload_parsed": False,
+            "separates_variation_from_issue": False,
+            "avoids_diagnosis": False,
+            "avoids_injury_prevention_claims": False,
+            "avoids_overconfident_language": False,
+            "includes_confidence_notes_when_required": False,
+        },
+        notes=[
+            "Summary provider failed before verification.",
+            summary_generation.parse_error or "Unknown summary provider failure.",
+        ],
+    )
+
+
+def _with_summary_generation_status(
+    summary_generation: SummaryGeneration,
+    *,
+    verifier_passed: bool,
+    fallback_used: bool,
+) -> SummaryGeneration:
+    return SummaryGeneration(
+        provider=summary_generation.provider,
+        backend=summary_generation.backend,
+        model=summary_generation.model,
+        prompt_contract_version=summary_generation.prompt_contract_version,
+        parse_ok=summary_generation.parse_ok,
+        parse_error=summary_generation.parse_error,
+        verifier_passed=verifier_passed,
+        fallback_used=fallback_used,
+        raw_output_present=summary_generation.raw_output_present,
+    )
+
+
 def _env_mock_mode(video_path: str | None) -> bool:
     configured = os.getenv("POZIFY_MOCK_MODE")
     if configured is None:
@@ -220,21 +257,7 @@ def run_pipeline(
     summary_generation = draft.generation
 
     if draft.summary is None:
-        verification = Verification(
-            passed=False,
-            checks={
-                "provider_payload_parsed": False,
-                "separates_variation_from_issue": False,
-                "avoids_diagnosis": False,
-                "avoids_injury_prevention_claims": False,
-                "avoids_overconfident_language": False,
-                "includes_confidence_notes_when_required": False,
-            },
-            notes=[
-                "Summary provider failed before verification.",
-                summary_generation.parse_error or "Unknown summary provider failure.",
-            ],
-        )
+        verification = _verification_for_provider_failure(summary_generation)
         summary = coach_summary.build_fallback(
             profile,
             classification,
@@ -245,16 +268,10 @@ def run_pipeline(
             verification_notes=[*verification.notes, "Conservative fallback summary returned."],
             mock_steps=mock_steps,
         )
-        summary_generation = SummaryGeneration(
-            provider=summary_generation.provider,
-            backend=summary_generation.backend,
-            model=summary_generation.model,
-            prompt_contract_version=summary_generation.prompt_contract_version,
-            parse_ok=summary_generation.parse_ok,
-            parse_error=summary_generation.parse_error,
+        summary_generation = _with_summary_generation_status(
+            summary_generation,
             verifier_passed=False,
             fallback_used=True,
-            raw_output_present=summary_generation.raw_output_present,
         )
     else:
         verification = verifier.run(
@@ -266,16 +283,10 @@ def run_pipeline(
         )
         if verification.passed:
             summary = draft.summary
-            summary_generation = SummaryGeneration(
-                provider=summary_generation.provider,
-                backend=summary_generation.backend,
-                model=summary_generation.model,
-                prompt_contract_version=summary_generation.prompt_contract_version,
-                parse_ok=summary_generation.parse_ok,
-                parse_error=summary_generation.parse_error,
+            summary_generation = _with_summary_generation_status(
+                summary_generation,
                 verifier_passed=True,
                 fallback_used=False,
-                raw_output_present=summary_generation.raw_output_present,
             )
         else:
             summary = coach_summary.build_fallback(
@@ -293,16 +304,10 @@ def run_pipeline(
                 checks=verification.checks,
                 notes=[*verification.notes, "Conservative fallback summary returned."],
             )
-            summary_generation = SummaryGeneration(
-                provider=summary_generation.provider,
-                backend=summary_generation.backend,
-                model=summary_generation.model,
-                prompt_contract_version=summary_generation.prompt_contract_version,
-                parse_ok=summary_generation.parse_ok,
-                parse_error=summary_generation.parse_error,
+            summary_generation = _with_summary_generation_status(
+                summary_generation,
                 verifier_passed=False,
                 fallback_used=True,
-                raw_output_present=summary_generation.raw_output_present,
             )
 
     write_artifact("summary_generation.json", summary_generation)

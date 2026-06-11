@@ -286,6 +286,9 @@ class PipelineContractTests(unittest.TestCase):
         self.assertFalse(report["artifacts"]["summary_parse_ok"])
         self.assertTrue(report["artifacts"]["summary_fallback_used"])
         self.assertFalse(report["verification"]["passed"])
+        joined_notes = " ".join(report["coach_summary"]["confidence_notes"]).lower()
+        self.assertNotIn("requires transformers", joined_notes)
+        self.assertNotIn("provider failed before verification", joined_notes)
 
     def test_contract_validation_rejects_missing_required_field(self) -> None:
         payload = {

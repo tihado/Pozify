@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import cv2
 import numpy as np
@@ -188,6 +189,87 @@ class AnnotatedRendererTests(unittest.TestCase):
             (inactive_roi[:, :, 2] > 180) & (inactive_roi[:, :, 1] < 180) & (inactive_roi[:, :, 0] < 120)
         )
         self.assertGreater(active_red_pixels, inactive_red_pixels * 4)
+
+    def test_renderer_reports_browser_incompatible_codec_without_ffmpeg(self) -> None:
+        video_path = self._write_video()
+        manifest = VideoManifest(
+            video_path=str(video_path),
+            fps=30.0,
+            duration_sec=0.2,
+            total_frames=6,
+            sampled_frames=6,
+            width=320,
+            height=240,
+            codec="mp4v",
+            container="mp4",
+            brightness_mean=100.0,
+            blur_laplacian_var=100.0,
+            quality_warnings=[],
+            analysis_allowed=True,
+        )
+        pose_sequence = PoseSequence(
+            frames=[_frame(index) for index in range(6)],
+            normalized=True,
+            smoothing_method="exponential_smoothing",
+            pose_valid_ratio=1.0,
+        )
+        issues = IssueMarkers(
+            issues=[
+                IssueMarker(
+                    rep_id=1,
+                    issue="hip_sag",
+                    severity=0.82,
+                    start_frame=2,
+                    end_frame=4,
+                    start_sec=0.067,
+                    end_sec=0.133,
+                    affected_joints=["left_hip"],
+                    evidence={
+                        "body_line_score": 0.42,
+                        "threshold": 0.6,
+                        "confidence": 0.54,
+                        "peak_frame": 3,
+                    },
+                )
+            ]
+        )
+        reps = Reps(
+            exercise="push_up",
+            reps=[Rep(1, 0, 2, 5, 0.0, 0.067, 0.167)],
+            partial_reps=[],
+        )
+
+        real_open_writer = annotated_renderer._open_video_writer
+
+        def _force_mp4v_writer(output_path: Path, fps: float, width: int, height: int) -> tuple[cv2.VideoWriter | None, str | None]:
+            writer = cv2.VideoWriter(
+                str(output_path),
+                cv2.VideoWriter_fourcc(*"mp4v"),
+                fps,
+                (width, height),
+            )
+            if writer.isOpened():
+                return writer, "mp4v"
+            return real_open_writer(output_path, fps, width, height)
+
+        with (
+            mock.patch.object(annotated_renderer, "_tool_path", return_value=None),
+            mock.patch.object(annotated_renderer, "_open_video_writer", side_effect=_force_mp4v_writer),
+        ):
+            result = annotated_renderer.run(
+                manifest,
+                pose_sequence,
+                reps,
+                issues,
+                Path(self.temp_dir.name),
+            )
+
+        self.assertIsNone(result.annotated_video_path)
+        self.assertEqual(result.status, "browser_incompatible_codec")
+        self.assertEqual(result.reason, "renderer_browser_playback_requires_ffmpeg_or_h264")
+        self.assertEqual(result.issue_clip_paths, [])
+        self.assertEqual(len(result.issue_thumbnail_paths), 1)
+        self.assertTrue(Path(result.issue_thumbnail_paths[0]["path"]).exists())
 
     def test_angle_label_uses_degree_evidence(self) -> None:
         issue = IssueMarker(

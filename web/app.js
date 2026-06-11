@@ -69,6 +69,7 @@ function renderStatusLabel(status) {
     source_decode_failed: "Could not decode video for rendering",
     invalid_dimensions: "Could not read video dimensions",
     writer_unavailable: "Could not open video encoder",
+    browser_incompatible_codec: "Annotated video could not be encoded for browser playback",
   };
   return labels[status] || "Annotated render unavailable";
 }
@@ -83,6 +84,8 @@ function renderReasonLabel(reason) {
       "The renderer could not determine a valid frame size for the output video.",
     renderer_could_not_open_video_writer:
       "The renderer could not create the output video file with an available codec.",
+    renderer_browser_playback_requires_ffmpeg_or_h264:
+      "This machine rendered a local fallback video codec that the browser cannot play. Install ffmpeg, or make an H.264 encoder available, to preview annotated video and issue clips in the UI.",
   };
   return labels[reason] || "No additional renderer details were captured.";
 }
