@@ -213,13 +213,26 @@ The Modal app uses:
 
 - `pozify-router-data` for raw videos, manifests, and feature caches.
 - `pozify-router-models` for `baseline.joblib`, `temporal.pt`, `evaluation.json`, and the selected
-  `router.joblib`.
+  router artifact.
 
-Download the selected baseline artifact after evaluation and place it at:
+The baseline trains a scikit-learn model over engineered window vectors. The temporal stage trains a
+compact BiLSTM over 30-frame feature tensors on a Modal A10 GPU and writes `temporal.pt` plus
+`temporal_metrics.json`. Its default hyperparameters follow the Riccio exercise-classification paper:
+73 hidden units, 0.2174 dropout, 0.0004 learning rate, batch size 54, and 73 epochs
+(https://arxiv.org/abs/2411.11548). Evaluation scores every available trained artifact, writes
+per-model metrics into `evaluation.json`, and records the active artifact in `router_selection.json`.
+Baseline wins ties to keep runtime inference lightweight unless the temporal model clearly improves
+the metrics.
+
+Download the selected artifact and its selection file after evaluation, then place them under:
 
 ```text
-models/exercise_router/active/router.joblib
+models/exercise_router/active/
 ```
+
+For the baseline this directory should contain `router.joblib`; for the temporal model it should
+contain `router.pt`. In both cases, include `router_selection.json` when present so the local loader
+can choose the intended active artifact even if multiple artifacts exist.
 
 Custom unknown clips can be uploaded into the data volume at `/data/raw/custom_unknown/` before the
 `features` stage. Use consented clips only; useful unknown examples include idle standing, walking
