@@ -17,7 +17,6 @@ from fastapi.staticfiles import StaticFiles
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from pozify.exercise_catalog import USER_SELECTABLE_EXERCISES
-from pozify.hf_spaces import default_spaces_gpu_duration, spaces_gpu
 from pozify.pipeline import run_pipeline
 
 BASE_DIR = Path(__file__).parent
@@ -192,11 +191,6 @@ def _parse_bool_form(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _analysis_gpu_duration(*_args: Any, **_kwargs: Any) -> int:
-    return default_spaces_gpu_duration()
-
-
-@spaces_gpu(duration=_analysis_gpu_duration)
 def _run_analysis_pipeline(
     video_path: str | None,
     profile_input: dict[str, Any],

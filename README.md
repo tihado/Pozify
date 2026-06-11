@@ -71,9 +71,10 @@ requires installing MMPose/MMCV and mapping model keypoints into the shared land
 
 ## Hugging Face ZeroGPU
 
-When this app runs on a Hugging Face Space with ZeroGPU hardware selected, the API analysis path is
-wrapped with `spaces.GPU`. The same code path is effect-free outside ZeroGPU, so local runs and CPU
-Spaces continue to use CPU by default.
+When this app runs on a Hugging Face Space with ZeroGPU hardware selected, only the compute-heavy
+pose backend and router inference calls are wrapped with `spaces.GPU`. The API and pipeline layer
+stay outside the ZeroGPU boundary so request state, streaming progress queues, and file serving are
+not serialized into the GPU worker.
 
 The runtime uses these defaults:
 
@@ -82,8 +83,8 @@ The runtime uses these defaults:
 - `POZIFY_SPACES_GPU_DURATION`: optional `spaces.GPU` duration in seconds, default `120`.
 
 The MediaPipe Tasks backend tries its GPU delegate on ZeroGPU and falls back to CPU if unavailable.
-The older `mp.solutions.pose` path remains CPU-only. The ZeroGPU wrapper is in place for the full
-analysis call and any CUDA-capable router or future pose backend used inside that call.
+The older `mp.solutions.pose` path remains CPU-only. The Torch exercise router loads and predicts
+inside its ZeroGPU-wrapped function, so model objects are not pickled across the API boundary.
 
 When running in real mode, the UI summary now shows:
 

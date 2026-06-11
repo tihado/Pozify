@@ -4,7 +4,8 @@ from pathlib import Path
 
 from pozify.contracts import ExerciseClassification, PoseSequence, UserProfile
 from pozify.exercise_catalog import DEFAULT_AUTO_EXERCISE
-from pozify.ml.exercise_router_features import extract_router_windows
+from pozify.hf_spaces import default_spaces_gpu_duration, spaces_gpu
+from pozify.ml.exercise_router_features import RouterWindow, extract_router_windows
 from pozify.ml.exercise_router_inference import (
     MIN_POSE_VALID_RATIO,
     RouterModelBundle,
@@ -87,6 +88,21 @@ def _unknown_fallback(
     )
 
 
+def _gpu_duration(*_args: object, **_kwargs: object) -> int:
+    return default_spaces_gpu_duration()
+
+
+@spaces_gpu(duration=_gpu_duration)
+def _predict_router_scores(
+    windows: list[RouterWindow],
+    model_dir: str,
+) -> list[dict[str, float]]:
+    bundle = load_router_model(Path(model_dir))
+    if bundle is None:
+        return []
+    return predict_window_probabilities(bundle, windows)
+
+
 def run(
     sequence: PoseSequence,
     profile: UserProfile,
@@ -111,10 +127,15 @@ def run(
         return _unknown_fallback()
 
     try:
-        bundle = model_bundle or load_router_model(model_dir or Path("models/exercise_router/active"))
-        if bundle is None:
-            return _unknown_fallback()
-        score_rows = predict_window_probabilities(bundle, windows)
+        if model_bundle is not None:
+            score_rows = predict_window_probabilities(model_bundle, windows)
+        else:
+            score_rows = _predict_router_scores(
+                windows,
+                str(model_dir or Path("models/exercise_router/active")),
+            )
+            if not score_rows:
+                return _unknown_fallback()
     except Exception:
         return _unknown_fallback()
 
