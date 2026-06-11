@@ -7,8 +7,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from pozify.contracts import ExerciseClassification, PoseFrame, PoseSequence
-from pozify.exercises import get_exercise_strategy
+from pozify.contracts import PoseFrame, PoseSequence
+from pozify.exercises import create_exercise_strategy
 from pozify.exercises.push_up import PushUpExercise
 from pozify.exercises.shoulder_press import ShoulderPressExercise
 from pozify.exercises.squat import SquatExercise
@@ -108,28 +108,23 @@ def _sequence_for_exercise(exercise: str, cycles: int, *, partial_tail: bool = F
 
 
 class RepCounterTests(unittest.TestCase):
-    def _classification(self, exercise: str) -> ExerciseClassification:
-        return ExerciseClassification(
-            exercise=exercise,  # type: ignore[arg-type]
-            confidence=0.95,
-            window_predictions=[],
-            fallback_required=False,
-        )
-
     def test_segments_squat_reps(self) -> None:
-        reps, debug = rep_counter.run(self._classification("squat"), _sequence_for_exercise("squat", 3))
+        reps, debug = rep_counter.run(create_exercise_strategy("squat"), _sequence_for_exercise("squat", 3))
         self.assertEqual(len(reps.reps), 3)
         self.assertEqual(reps.reps[0].start_frame, 0)
         self.assertTrue(debug["accepted_reps"])
 
     def test_segments_push_up_reps(self) -> None:
-        reps, _debug = rep_counter.run(self._classification("push_up"), _sequence_for_exercise("push_up", 3))
+        reps, _debug = rep_counter.run(
+            create_exercise_strategy("push_up"),
+            _sequence_for_exercise("push_up", 3),
+        )
         self.assertEqual(len(reps.reps), 3)
         self.assertEqual(reps.partial_reps, [])
 
     def test_segments_shoulder_press_reps(self) -> None:
         reps, _debug = rep_counter.run(
-            self._classification("shoulder_press"),
+            create_exercise_strategy("shoulder_press"),
             _sequence_for_exercise("shoulder_press", 3),
         )
         self.assertEqual(len(reps.reps), 3)
@@ -137,22 +132,27 @@ class RepCounterTests(unittest.TestCase):
 
     def test_reports_partial_last_rep(self) -> None:
         reps, _debug = rep_counter.run(
-            self._classification("push_up"),
+            create_exercise_strategy("push_up"),
             _sequence_for_exercise("push_up", 2, partial_tail=True),
         )
         self.assertEqual(len(reps.reps), 2)
         self.assertIn("ends_mid_rep", {item["reason"] for item in reps.partial_reps})
 
     def test_unknown_exercise_is_not_segmented(self) -> None:
-        reps, debug = rep_counter.run(self._classification("unknown"), _sequence_for_exercise("push_up", 1))
+        reps, debug = rep_counter.run(
+            create_exercise_strategy("unknown"),
+            _sequence_for_exercise("push_up", 1),
+        )
         self.assertEqual(reps.reps, [])
         self.assertEqual(reps.partial_reps, [{"reason": "unknown_exercise"}])
         self.assertEqual(debug["selected_signal"], "none")
 
     def test_exercises_resolve_to_specific_strategies(self) -> None:
-        self.assertIsInstance(get_exercise_strategy("push_up"), PushUpExercise)
-        self.assertIsInstance(get_exercise_strategy("shoulder_press"), ShoulderPressExercise)
-        self.assertIsInstance(get_exercise_strategy("squat"), SquatExercise)
+        push_up = create_exercise_strategy("push_up")
+        self.assertIsInstance(push_up, PushUpExercise)
+        self.assertIsInstance(create_exercise_strategy("shoulder_press"), ShoulderPressExercise)
+        self.assertIsInstance(create_exercise_strategy("squat"), SquatExercise)
+        self.assertIsNot(push_up, create_exercise_strategy("push_up"))
 
 
 if __name__ == "__main__":

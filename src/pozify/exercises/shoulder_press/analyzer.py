@@ -3,7 +3,7 @@ from __future__ import annotations
 from statistics import mean
 
 from pozify.contracts import PoseFrame
-from pozify.steps.exercise_analyzers.base import (
+from pozify.exercises.shared.analyzer import (
     ExerciseMetricResult,
     max_optional,
     mean_optional,

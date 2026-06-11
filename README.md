@@ -92,6 +92,9 @@ user profile + input video
 -> final report
 ```
 
+After classification, the pipeline creates one object for the detected exercise class and passes that
+object through rep counting, rep analysis, variation detection, and issue marking.
+
 ## Project Structure
 
 ```text
@@ -100,6 +103,22 @@ src/pozify/
   contracts.py
   pipeline.py
   artifacts.py
+  exercises/
+    push_up/
+      strategy.py
+      analyzer.py
+      issue_markers.py
+    squat/
+      strategy.py
+      analyzer.py
+      issue_markers.py
+    shoulder_press/
+      strategy.py
+      analyzer.py
+      issue_markers.py
+    shared/
+      analyzer.py
+      issue_marker.py
   steps/
     video_qc.py
     pose_landmarker.py
@@ -178,8 +197,13 @@ exercise, add one `ExerciseSpec` with:
 
 The Gradio dropdown, profile validation, variation detector, rep analysis, and issue marker read from
 this catalog, so new exercises do not require changing each step just to become selectable. Real
-exercise-specific rep metrics live in `src/pozify/steps/rep_analysis.py`; variation rules live in
-`src/pozify/steps/variation_detector.py`.
+exercise-specific code lives under `src/pozify/exercises/<exercise>/`:
+
+- `strategy.py`: rep-counting signal, variation logic, and exercise strategy wiring
+- `analyzer.py`: per-rep metrics
+- `issue_markers.py`: frame-level issue rules
+
+Shared analyzer and issue marker primitives live under `src/pozify/exercises/shared/`.
 
 Recommended replacement order:
 

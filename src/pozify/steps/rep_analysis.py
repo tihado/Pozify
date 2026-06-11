@@ -4,7 +4,6 @@ from statistics import mean, pstdev
 from typing import Any, Callable
 
 from pozify.contracts import (
-    ExerciseClassification,
     PoseFrame,
     PoseSequence,
     Rep,
@@ -12,8 +11,8 @@ from pozify.contracts import (
     RepAnalysisItem,
     Reps,
 )
-from pozify.exercises import get_exercise_strategy
-from pozify.steps.exercise_analyzers.base import (
+from pozify.exercises import ExerciseStrategy
+from pozify.exercises.shared.analyzer import (
     mean_optional,
     round_optional,
     safe_ratio,
@@ -149,13 +148,13 @@ def _common_metrics(
     }
 
 
-def _primary_signal(exercise: str, frames: list[PoseFrame]) -> list[float | None]:
-    if exercise == "shoulder_press":
+def _primary_signal(exercise_key: str, frames: list[PoseFrame]) -> list[float | None]:
+    if exercise_key == "shoulder_press":
         return value_series(
             frames,
             lambda frame: average_axis(frame, ("left_wrist", "right_wrist"), "y"),
         )
-    if exercise == "push_up":
+    if exercise_key == "push_up":
         return value_series(
             frames,
             lambda frame: mean_optional(
@@ -188,15 +187,14 @@ def _fatigue_trend(items: list[RepAnalysisItem]) -> float:
 
 
 def run(
-    classification: ExerciseClassification,
+    exercise: ExerciseStrategy,
     reps: Reps,
     sequence: PoseSequence,
 ) -> RepAnalysis:
-    exercise = get_exercise_strategy(classification.exercise)
     draft_items: list[tuple[Rep, dict[str, Any], float, float, float, list[str]]] = []
     for rep in reps.reps:
         frames = _frames_for_rep(sequence, rep)
-        primary_signal = _primary_signal(classification.exercise, frames)
+        primary_signal = _primary_signal(exercise.exercise, frames)
         common_metrics = _common_metrics(rep, frames, primary_signal)
         exercise_metrics, rom_score, stability_score, symmetry_score, hints = exercise.metrics(frames)
         metrics = {**common_metrics, **exercise_metrics}
@@ -262,7 +260,7 @@ def run(
             aggregate_metrics[f"avg_{metric_name}"] = aggregate_value
 
     return RepAnalysis(
-        exercise=classification.exercise,
+        exercise=exercise.exercise,
         items=items,
         aggregate_metrics=aggregate_metrics,
     )

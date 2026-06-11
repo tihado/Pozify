@@ -9,13 +9,13 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify.contracts import (
-    ExerciseClassification,
     PoseFrame,
     PoseSequence,
     Rep,
     Reps,
     UserProfile,
 )
+from pozify.exercises import create_exercise_strategy
 from pozify.steps import rep_analysis, variation_detector
 
 
@@ -170,15 +170,6 @@ def _custom_sequence(
     )
 
 
-def _classification(exercise: str) -> ExerciseClassification:
-    return ExerciseClassification(
-        exercise=exercise,
-        confidence=0.95,
-        window_predictions=[],
-        fallback_required=False,
-    )
-
-
 def _reps(exercise: str) -> Reps:
     return Reps(
         exercise=exercise,
@@ -200,12 +191,13 @@ def _profile() -> UserProfile:
 
 class RepAnalysisVariationTests(unittest.TestCase):
     def test_push_up_metrics_detect_wide_grip_variation(self) -> None:
+        exercise = create_exercise_strategy("push_up")
         analysis = rep_analysis.run(
-            _classification("push_up"),
+            exercise,
             _reps("push_up"),
             _sequence("push_up"),
         )
-        variation = variation_detector.run(_classification("push_up"), analysis, _profile())
+        variation = variation_detector.run(exercise, analysis, _profile())
 
         self.assertEqual(variation.detected_variation, "wide_grip_push_up")
         self.assertIn("wide_hand_placement", variation.not_issues)
@@ -213,32 +205,35 @@ class RepAnalysisVariationTests(unittest.TestCase):
         self.assertIn("body_line_score", analysis.items[0].metrics)
 
     def test_push_up_metrics_detect_knee_push_up_variation(self) -> None:
+        exercise = create_exercise_strategy("push_up")
         analysis = rep_analysis.run(
-            _classification("push_up"),
+            exercise,
             _reps("push_up"),
             _custom_sequence(_knee_push_up_landmarks),
         )
-        variation = variation_detector.run(_classification("push_up"), analysis, _profile())
+        variation = variation_detector.run(exercise, analysis, _profile())
 
         self.assertEqual(variation.detected_variation, "knee_push_up")
         self.assertIn("knee_contact", variation.not_issues)
         self.assertGreaterEqual(analysis.aggregate_metrics["avg_knee_support_score"], 0.8)
 
     def test_straight_leg_push_up_does_not_false_positive_as_knee_push_up(self) -> None:
+        exercise = create_exercise_strategy("push_up")
         analysis = rep_analysis.run(
-            _classification("push_up"),
+            exercise,
             _reps("push_up"),
             _custom_sequence(_straight_leg_push_up_landmarks),
         )
-        variation = variation_detector.run(_classification("push_up"), analysis, _profile())
+        variation = variation_detector.run(exercise, analysis, _profile())
 
         self.assertNotEqual(variation.detected_variation, "knee_push_up")
         self.assertNotIn("knee_contact", variation.not_issues)
         self.assertLess(analysis.aggregate_metrics["avg_knee_support_score"], 0.8)
 
     def test_squat_metrics_detect_wide_stance_variation(self) -> None:
-        analysis = rep_analysis.run(_classification("squat"), _reps("squat"), _sequence("squat"))
-        variation = variation_detector.run(_classification("squat"), analysis, _profile())
+        exercise = create_exercise_strategy("squat")
+        analysis = rep_analysis.run(exercise, _reps("squat"), _sequence("squat"))
+        variation = variation_detector.run(exercise, analysis, _profile())
 
         self.assertEqual(variation.detected_variation, "wide_squat_stance")
         self.assertIn("wide_stance", variation.not_issues)
@@ -246,12 +241,13 @@ class RepAnalysisVariationTests(unittest.TestCase):
         self.assertIn("min_knee_angle_deg", analysis.items[0].metrics)
 
     def test_shoulder_press_metrics_detect_partial_press_variation(self) -> None:
+        exercise = create_exercise_strategy("shoulder_press")
         analysis = rep_analysis.run(
-            _classification("shoulder_press"),
+            exercise,
             _reps("shoulder_press"),
             _sequence("shoulder_press"),
         )
-        variation = variation_detector.run(_classification("shoulder_press"), analysis, _profile())
+        variation = variation_detector.run(exercise, analysis, _profile())
 
         self.assertEqual(variation.detected_variation, "partial_press")
         self.assertIn("partial_range_of_motion", variation.not_issues)
@@ -267,12 +263,13 @@ class RepAnalysisVariationTests(unittest.TestCase):
             known_limitations=[],
             equipment="bodyweight",
         )
+        exercise = create_exercise_strategy("push_up")
         analysis = rep_analysis.run(
-            _classification("push_up"),
+            exercise,
             _reps("push_up"),
             _sequence("push_up"),
         )
-        variation = variation_detector.run(_classification("push_up"), analysis, profile)
+        variation = variation_detector.run(exercise, analysis, profile)
 
         self.assertEqual(variation.detected_variation, "close_grip_push_up")
         self.assertEqual(variation.variation_confidence, 0.95)

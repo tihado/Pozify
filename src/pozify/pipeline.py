@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from pozify.artifacts import write_json
 from pozify.contracts import UserProfile, to_dict
+from pozify.exercises import create_exercise_strategy
 from pozify.steps import (
     annotated_renderer,
     coach_summary,
@@ -73,17 +74,19 @@ def run_pipeline(
     classification = exercise_classifier.run(cleaned_pose_sequence, profile)
     write_artifact("exercise_classification.json", classification)
 
-    reps, rep_debug = rep_counter.run(classification, cleaned_pose_sequence)
+    exercise = create_exercise_strategy(classification.exercise)
+
+    reps, rep_debug = rep_counter.run(exercise, cleaned_pose_sequence)
     write_artifact("reps.json", reps)
     write_artifact("rep_debug.json", rep_debug)
 
-    analysis = rep_analysis.run(classification, reps, cleaned_pose_sequence)
+    analysis = rep_analysis.run(exercise, reps, cleaned_pose_sequence)
     write_artifact("rep_analysis.json", analysis)
 
-    variation = variation_detector.run(classification, analysis, profile)
+    variation = variation_detector.run(exercise, analysis, profile)
     write_artifact("variation.json", variation)
 
-    issues = issue_marker.run(classification, reps, analysis, variation)
+    issues = issue_marker.run(exercise, reps, analysis, variation, cleaned_pose_sequence)
     write_artifact("issue_markers.json", issues)
 
     annotated_video_path = annotated_renderer.run(manifest, cleaned_pose_sequence, reps, issues, run_dir)
@@ -96,7 +99,6 @@ def run_pipeline(
     analysis_mode = "mock" if mock_mode else "real"
     mock_steps = [
         "exercise_classifier",
-        "issue_marker",
         "coach_summary",
         "verifier",
     ]

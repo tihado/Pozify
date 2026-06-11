@@ -4,13 +4,18 @@ from typing import Any
 
 from pozify.contracts import PoseSequence, RepAnalysis
 from pozify.exercises.base import ExerciseStrategy
-from pozify.steps.exercise_analyzers.shoulder_press import ShoulderPressAnalyzer
+from pozify.exercises.shoulder_press.analyzer import ShoulderPressAnalyzer
+from pozify.exercises.shared.issue_marker import IssueRule
+from pozify.exercises.shoulder_press.issue_markers import RULES as ISSUE_RULES
 from pozify.steps.rep_counters.base import combine, mean_optional, normalized_samples
 from pozify.steps.rep_signals import SignalSample, angle_deg, average_axis, body_line_score
 
 
 class ShoulderPressExercise(ShoulderPressAnalyzer, ExerciseStrategy):
     exercise = "shoulder_press"
+
+    def issue_rules(self) -> tuple[IssueRule, ...]:
+        return ISSUE_RULES
 
     def build_signal(self, sequence: PoseSequence) -> tuple[list[SignalSample], dict[str, Any]]:
         wrist_y = [average_axis(frame, ("left_wrist", "right_wrist"), "y") for frame in sequence.frames]

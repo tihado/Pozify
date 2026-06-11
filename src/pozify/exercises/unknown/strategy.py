@@ -5,7 +5,7 @@ from typing import Any
 from pozify.contracts import PoseSequence, RepAnalysis, Reps
 from pozify.exercise_catalog import get_exercise_spec
 from pozify.exercises.base import ExerciseStrategy
-from pozify.steps.exercise_analyzers.unknown import UnknownAnalyzer
+from pozify.exercises.unknown.analyzer import UnknownAnalyzer
 from pozify.steps.rep_signals import SignalSample
 
 

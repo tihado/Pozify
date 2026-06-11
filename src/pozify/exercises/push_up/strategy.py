@@ -4,13 +4,18 @@ from typing import Any
 
 from pozify.contracts import PoseSequence, RepAnalysis
 from pozify.exercises.base import ExerciseStrategy
-from pozify.steps.exercise_analyzers.push_up import PushUpAnalyzer
+from pozify.exercises.push_up.analyzer import PushUpAnalyzer
+from pozify.exercises.shared.issue_marker import IssueRule
+from pozify.exercises.push_up.issue_markers import RULES as ISSUE_RULES
 from pozify.steps.rep_counters.base import combine, mean_optional, normalized_samples
 from pozify.steps.rep_signals import SignalSample, angle_deg, average_axis, body_line_score
 
 
 class PushUpExercise(PushUpAnalyzer, ExerciseStrategy):
     exercise = "push_up"
+
+    def issue_rules(self) -> tuple[IssueRule, ...]:
+        return ISSUE_RULES
 
     def build_signal(self, sequence: PoseSequence) -> tuple[list[SignalSample], dict[str, Any]]:
         hip_y = [average_axis(frame, ("left_hip", "right_hip"), "y") for frame in sequence.frames]
