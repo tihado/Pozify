@@ -51,17 +51,35 @@ EXPECTED_ARTIFACT_KEYS = {
         "video_path",
         "width",
     ],
-    "pose_sequence.json": ["frames", "normalized", "pose_valid_ratio", "smoothing_method"],
+    "pose_sequence.json": [
+        "frames",
+        "normalized",
+        "pose_valid_ratio",
+        "smoothing_method",
+    ],
     "exercise_classification.json": [
         "confidence",
         "exercise",
         "fallback_required",
         "window_predictions",
     ],
-    "rep_debug.json": ["accepted_reps", "body_line_mean", "extrema", "raw_signal_range", "selected_signal", "thresholds", "usable_signal_samples"],
+    "rep_debug.json": [
+        "accepted_reps",
+        "body_line_mean",
+        "extrema",
+        "raw_signal_range",
+        "selected_signal",
+        "thresholds",
+        "usable_signal_samples",
+    ],
     "reps.json": ["exercise", "partial_reps", "reps"],
     "rep_analysis.json": ["aggregate_metrics", "exercise", "items"],
-    "variation.json": ["detected_variation", "exercise", "not_issues", "variation_confidence"],
+    "variation.json": [
+        "detected_variation",
+        "exercise",
+        "not_issues",
+        "variation_confidence",
+    ],
     "issue_markers.json": ["issues"],
     "coach_summary.json": [
         "confidence_notes",
@@ -120,8 +138,16 @@ class PipelineContractTests(unittest.TestCase):
         for frame_index in range(int(fps * duration_sec)):
             frame = np.full((height, width, 3), 130, dtype=np.uint8)
             offset = frame_index % 120
-            cv2.rectangle(frame, (40 + offset, 80), (260 + offset, 300), (245, 245, 245), -1)
-            cv2.line(frame, (0, frame_index % height), (width - 1, height - 1), (20, 20, 20), 3)
+            cv2.rectangle(
+                frame, (40 + offset, 80), (260 + offset, 300), (245, 245, 245), -1
+            )
+            cv2.line(
+                frame,
+                (0, frame_index % height),
+                (width - 1, height - 1),
+                (20, 20, 20),
+                3,
+            )
             writer.write(frame)
         writer.release()
         return path
@@ -138,7 +164,9 @@ class PipelineContractTests(unittest.TestCase):
             self.assertEqual(sorted(payload.keys()), keys, artifact_name)
             if artifact_name == "final_report.json":
                 self.assertIn("issue_thumbnail_paths", payload["artifacts"])
-                self.assertIsInstance(payload["artifacts"]["issue_thumbnail_paths"], list)
+                self.assertIsInstance(
+                    payload["artifacts"]["issue_thumbnail_paths"], list
+                )
                 self.assertIn("issue_clip_paths", payload["artifacts"])
                 self.assertIsInstance(payload["artifacts"]["issue_clip_paths"], list)
 
@@ -163,17 +191,23 @@ class PipelineContractTests(unittest.TestCase):
         )
 
     def test_pipeline_runs_end_to_end_without_video(self) -> None:
-        result = pipeline.run_pipeline(video_path=None, profile_input=PROFILE_INPUT, mock=True)
+        result = pipeline.run_pipeline(
+            video_path=None, profile_input=PROFILE_INPUT, mock=True
+        )
 
         self._assert_pipeline_artifacts(result)
         report = result["final_report"]
         self.assertEqual(report["exercise"]["exercise"], "squat")
-        self.assertEqual(report["video_manifest"]["quality_warnings"], ["video_decode_failed"])
+        self.assertEqual(
+            report["video_manifest"]["quality_warnings"], ["video_decode_failed"]
+        )
         self.assertFalse(report["video_manifest"]["analysis_allowed"])
 
     def test_pipeline_runs_end_to_end_with_fixture_video_path(self) -> None:
         fixture = self._write_video("sample.mp4")
-        result = pipeline.run_pipeline(video_path=str(fixture), profile_input=PROFILE_INPUT, mock=True)
+        result = pipeline.run_pipeline(
+            video_path=str(fixture), profile_input=PROFILE_INPUT, mock=True
+        )
 
         self._assert_pipeline_artifacts(result)
         report = result["final_report"]
@@ -274,7 +308,9 @@ class PipelineContractTests(unittest.TestCase):
         self.assertEqual(report["exercise"]["exercise"], "unknown")
         self.assertFalse(report["exercise"]["fallback_required"])
         self.assertEqual(report["reps"]["reps"], [])
-        self.assertEqual(report["reps"]["partial_reps"], [{"reason": "unknown_exercise"}])
+        self.assertEqual(
+            report["reps"]["partial_reps"], [{"reason": "unknown_exercise"}]
+        )
 
     def test_mock_mode_defaults_to_real_when_video_path_is_present(self) -> None:
         with patch.dict(os.environ, {}, clear=True):

@@ -27,16 +27,6 @@ function label(value) {
   return value.replaceAll("_", " ");
 }
 
-async function readResponseBody(response) {
-  const text = await response.text();
-  if (!text) return {};
-
-  const contentType = response.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) return JSON.parse(text);
-
-  return { detail: text };
-}
-
 function Field({ labelText, children, full = false }) {
   return h(
     "label",
@@ -185,7 +175,8 @@ function applyProgressEvent(currentSteps, event) {
 }
 
 async function readAnalysisStream(response, onEvent) {
-  if (!response.body) throw new Error("Streaming is not available in this browser.");
+  if (!response.body)
+    throw new Error("Streaming is not available in this browser.");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -202,7 +193,8 @@ async function readAnalysisStream(response, onEvent) {
       const event = JSON.parse(line);
       if (event.type === "progress") onEvent(event);
       if (event.type === "complete") result = event.result;
-      if (event.type === "error") throw new Error(event.detail || "Analysis failed.");
+      if (event.type === "error")
+        throw new Error(event.detail || "Analysis failed.");
     }
   }
 
@@ -210,7 +202,8 @@ async function readAnalysisStream(response, onEvent) {
     const event = JSON.parse(buffer);
     if (event.type === "progress") onEvent(event);
     if (event.type === "complete") result = event.result;
-    if (event.type === "error") throw new Error(event.detail || "Analysis failed.");
+    if (event.type === "error")
+      throw new Error(event.detail || "Analysis failed.");
   }
 
   if (!result) throw new Error("Analysis finished without a report.");
@@ -223,7 +216,11 @@ function ProgressPanel({ steps }) {
   return h(
     "section",
     { className: "progress-panel", "aria-live": "polite" },
-    h("h3", null, isComplete ? "Scan results are ready" : "Your scan is moving"),
+    h(
+      "h3",
+      null,
+      isComplete ? "Scan results are ready" : "Your scan is moving",
+    ),
     h(
       "ol",
       { className: "progress-list" },
@@ -287,7 +284,9 @@ function ReviewInsights({ result }) {
       h(
         "small",
         null,
-        warnings.length ? warnings.map(label).join(", ") : "clear enough to coach",
+        warnings.length
+          ? warnings.map(label).join(", ")
+          : "clear enough to coach",
       ),
     ),
   );

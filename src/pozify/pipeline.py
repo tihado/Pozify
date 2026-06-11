@@ -42,7 +42,9 @@ def run_pipeline(
 ) -> dict[str, Any]:
     mock_mode = _env_mock_mode(video_path) if mock is None else mock
 
-    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+    run_id = (
+        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+    )
     run_dir = RUNS_DIR / run_id
     artifact_index: list[dict[str, str]] = []
 
@@ -121,7 +123,9 @@ def run_pipeline(
     )
 
     emit("exercise", "active", "Let me figure out which exercise you are doing.")
-    classification = exercise_classifier.run(cleaned_pose_sequence, profile)
+    classification = exercise_classifier.run(
+        cleaned_pose_sequence, profile, mock=mock_mode
+    )
     write_artifact("exercise_classification.json", classification)
     emit(
         "exercise",
@@ -211,7 +215,9 @@ def run_pipeline(
     if mock_mode:
         mock_steps.insert(0, "exercise_classifier")
 
-    summary = coach_summary.run(profile, classification, reps, analysis, variation, issues)
+    summary = coach_summary.run(
+        profile, classification, reps, analysis, variation, issues
+    )
     write_artifact("coach_summary.json", summary)
 
     verification = verifier.run(summary, issues, variation)
