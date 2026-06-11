@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import joblib
 import numpy as np
@@ -25,6 +26,7 @@ from pozify.ml.exercise_router_inference import (
     WindowRouterPrediction,
     aggregate_window_predictions,
     load_router_model,
+    load_router_model_from_hf,
 )
 from pozify.steps import exercise_classifier
 from pozify.steps.pose_backends.landmarks import LANDMARK_NAMES
@@ -221,6 +223,40 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
         )
         self.assertEqual(result.exercise, "push_up")
         self.assertFalse(result.fallback_required)
+
+    def test_hf_loader_honors_selection_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir)
+            artifact_path = model_dir / "router.joblib"
+            selection_path = model_dir / "router_selection.json"
+            joblib.dump(
+                {
+                    "model": _FakePushUpModel(),
+                    "labels": list(ROUTER_LABELS),
+                    "model_kind": "baseline",
+                },
+                artifact_path,
+            )
+            selection_path.write_text(
+                json.dumps({"selected_artifact": artifact_path.name}),
+                encoding="utf-8",
+            )
+
+            def fake_download(*, repo_id: str, filename: str, revision: str | None) -> Path:
+                self.assertEqual(repo_id, "owner/pozify-router")
+                self.assertEqual(revision, "main")
+                return {"router_selection.json": selection_path, "router.joblib": artifact_path}[filename]
+
+            with patch(
+                "pozify.ml.exercise_router_inference._hf_hub_download",
+                side_effect=fake_download,
+            ):
+                bundle = load_router_model_from_hf("owner/pozify-router", revision="main")
+
+        self.assertIsNotNone(bundle)
+        assert bundle is not None
+        self.assertEqual(bundle.model_kind, "baseline")
+        self.assertEqual(bundle.labels, tuple(ROUTER_LABELS))
 
 
 class ExerciseClassifierStepTests(unittest.TestCase):

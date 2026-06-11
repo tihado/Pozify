@@ -209,6 +209,12 @@ uv run modal run scripts/exercise_router_modal.py --stage train-temporal
 uv run modal run scripts/exercise_router_modal.py --stage evaluate
 ```
 
+The latest training metrics and selected-artifact result are recorded in
+[docs/exercise-router-training-report.md](docs/exercise-router-training-report.md).
+Custom data collection is documented in
+[docs/custom-data-collection-guide.md](docs/custom-data-collection-guide.md). Demo clips are listed
+in [demo/README.md](demo/README.md).
+
 The Modal app uses:
 
 - `pozify-router-data` for raw videos, manifests, and feature caches.
@@ -233,6 +239,10 @@ models/exercise_router/active/
 For the baseline this directory should contain `router.joblib`; for the temporal model it should
 contain `router.pt`. In both cases, include `router_selection.json` when present so the local loader
 can choose the intended active artifact even if multiple artifacts exist.
+
+To publish and load the router from Hugging Face, use the setup notes in
+[docs/huggingface-router-release.md](docs/huggingface-router-release.md). The draft model card is in
+[docs/huggingface-router-model-card.md](docs/huggingface-router-model-card.md).
 
 Custom unknown clips can be uploaded into the data volume at `/data/raw/custom_unknown/` before the
 `features` stage. Use consented clips only; useful unknown examples include idle standing, walking

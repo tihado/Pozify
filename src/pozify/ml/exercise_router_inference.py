@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,9 @@ from pozify.ml.exercise_router_temporal import TorchTemporalRouter
 
 DEFAULT_MODEL_DIR = Path("models/exercise_router/active")
 ACTIVE_SELECTION_FILENAME = "router_selection.json"
+HF_REPO_ID_ENV = "POZIFY_ROUTER_HF_REPO_ID"
+HF_REVISION_ENV = "POZIFY_ROUTER_HF_REVISION"
+HF_DISABLE_ENV = "POZIFY_ROUTER_DISABLE_HF"
 MODEL_FILENAMES = (
     "router.joblib",
     "router.pt",
@@ -54,6 +58,13 @@ class AggregatedRouterPrediction:
 
 
 def load_router_model(model_dir: Path = DEFAULT_MODEL_DIR) -> RouterModelBundle | None:
+    try:
+        hf_bundle = load_router_model_from_hf()
+    except Exception:
+        hf_bundle = None
+    if hf_bundle is not None:
+        return hf_bundle
+
     selected_path = _selected_artifact_path(model_dir)
     if selected_path is not None and selected_path.exists():
         return load_router_model_file(selected_path)
@@ -63,6 +74,48 @@ def load_router_model(model_dir: Path = DEFAULT_MODEL_DIR) -> RouterModelBundle 
         if not path.exists():
             continue
         return load_router_model_file(path)
+    return None
+
+
+def load_router_model_from_hf(
+    repo_id: str | None = None,
+    revision: str | None = None,
+) -> RouterModelBundle | None:
+    if _env_truthy(os.getenv(HF_DISABLE_ENV)):
+        return None
+
+    repo_id = repo_id or os.getenv(HF_REPO_ID_ENV)
+    if not repo_id:
+        return None
+
+    revision = revision or os.getenv(HF_REVISION_ENV) or None
+    selection_path = _download_hf_artifact(
+        repo_id=repo_id,
+        filename=ACTIVE_SELECTION_FILENAME,
+        revision=revision,
+        required=False,
+    )
+    if selection_path is not None:
+        selected_artifact = _selected_artifact_name(selection_path)
+        if selected_artifact:
+            artifact_path = _download_hf_artifact(
+                repo_id=repo_id,
+                filename=selected_artifact,
+                revision=revision,
+                required=True,
+            )
+            if artifact_path is not None:
+                return load_router_model_file(artifact_path)
+
+    for filename in MODEL_FILENAMES:
+        artifact_path = _download_hf_artifact(
+            repo_id=repo_id,
+            filename=filename,
+            revision=revision,
+            required=False,
+        )
+        if artifact_path is not None:
+            return load_router_model_file(artifact_path)
     return None
 
 
@@ -240,6 +293,49 @@ def _selected_artifact_path(model_dir: Path) -> Path | None:
     if not isinstance(selected_artifact, str) or not selected_artifact:
         return None
     return model_dir / selected_artifact
+
+
+def _selected_artifact_name(selection_path: Path) -> str | None:
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    selected_artifact = selection.get("selected_artifact")
+    if not isinstance(selected_artifact, str) or not selected_artifact:
+        return None
+    return selected_artifact
+
+
+def _download_hf_artifact(
+    *,
+    repo_id: str,
+    filename: str,
+    revision: str | None,
+    required: bool,
+) -> Path | None:
+    try:
+        return _hf_hub_download(repo_id=repo_id, filename=filename, revision=revision)
+    except Exception:
+        if required:
+            raise
+        return None
+
+
+def _hf_hub_download(*, repo_id: str, filename: str, revision: str | None) -> Path:
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError as exc:  # pragma: no cover - dependency is declared
+        raise RuntimeError("huggingface_hub is required to load router artifacts from the Hub") from exc
+
+    return Path(
+        hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type="model",
+            revision=revision,
+        )
+    )
+
+
+def _env_truthy(value: str | None) -> bool:
+    return value is not None and value.strip().lower() in {"1", "on", "true", "yes"}
 
 
 def _score_map(row: np.ndarray, labels: tuple[str, ...]) -> dict[str, float]:
