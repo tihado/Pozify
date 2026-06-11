@@ -886,7 +886,6 @@ function App() {
           status === "running" ? "Analyzing..." : "Analyze Form",
         ),
         error ? h("div", { className: "error" }, error) : null,
-        h(ProgressPanel, { steps: progressSteps }),
       ),
       h(
         "section",
@@ -920,6 +919,9 @@ function App() {
                 h("span", null, "The annotated video appears after analysis."),
               ),
         ),
+        result?.annotated_video_url
+          ? null
+          : h(ProgressPanel, { steps: progressSteps }),
       ),
     ),
     h(ReportPanel, { result, activeTab, onTabChange: setActiveTab }),
