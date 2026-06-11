@@ -141,10 +141,11 @@ function finalProgressState(result) {
 
 function ProgressPanel({ steps }) {
   if (!steps.length) return null;
+  const isComplete = steps.every((step) => step.status === "done");
   return h(
     "section",
     { className: "progress-panel", "aria-live": "polite" },
-    h("h3", null, "Your scan is moving"),
+    h("h3", null, isComplete ? "Scan results are ready" : "Your scan is moving"),
     h(
       "ol",
       { className: "progress-list" },
@@ -155,6 +156,60 @@ function ProgressPanel({ steps }) {
           h("span", { className: "progress-dot", "aria-hidden": "true" }),
           h("span", null, step.text),
         ),
+      ),
+    ),
+  );
+}
+
+function ReviewInsights({ result }) {
+  if (!result) return null;
+  const report = result.report;
+  const warnings = report.video_manifest?.quality_warnings || [];
+  const exercise = label(report.exercise?.exercise || "movement");
+  const repCount = report.reps?.reps?.length || 0;
+  const issues = report.issue_markers?.issues || [];
+  const confidence = percent(report.exercise?.confidence);
+  const issueText = issues.length
+    ? `${issues.length} coaching moment${issues.length === 1 ? "" : "s"}`
+    : "No clear form issues";
+
+  return h(
+    "div",
+    { className: "scan-insights", "aria-label": "Scan results" },
+    h(
+      "article",
+      { className: "scan-insight" },
+      h("span", null, "Movement"),
+      h("strong", null, exercise),
+      h("small", null, `confidence ${confidence}`),
+    ),
+    h(
+      "article",
+      { className: "scan-insight" },
+      h("span", null, "Reps counted"),
+      h("strong", null, String(repCount)),
+      h("small", null, repCount === 1 ? "clean rep detected" : "reps detected"),
+    ),
+    h(
+      "article",
+      { className: "scan-insight" },
+      h("span", null, "Coach review"),
+      h("strong", null, issueText),
+      h(
+        "small",
+        null,
+        issues.length ? "tap Issues for clips" : "nothing major stood out",
+      ),
+    ),
+    h(
+      "article",
+      { className: "scan-insight" },
+      h("span", null, "Video quality"),
+      h("strong", null, warnings.length ? "Needs a quick note" : "Looks good"),
+      h(
+        "small",
+        null,
+        warnings.length ? warnings.map(label).join(", ") : "clear enough to coach",
       ),
     ),
   );
@@ -922,6 +977,7 @@ function App() {
         result?.annotated_video_url
           ? null
           : h(ProgressPanel, { steps: progressSteps }),
+        h(ReviewInsights, { result }),
       ),
     ),
     h(ReportPanel, { result, activeTab, onTabChange: setActiveTab }),
