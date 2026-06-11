@@ -23,7 +23,7 @@ def _push_up_variation(analysis: RepAnalysis) -> tuple[str, float, list[str]]:
     knee_support = _metric(analysis, "avg_knee_support_score")
     not_issues: list[str] = []
 
-    if knee_support is not None and knee_support >= 0.65:
+    if knee_support is not None and knee_support >= 0.8:
         return "knee_push_up", _confidence(0.74, analysis, knee_support), ["knee_contact"]
     if hand_width is not None and hand_width >= 1.45:
         return "wide_grip_push_up", _confidence(0.72, analysis, hand_width), ["wide_hand_placement"]
