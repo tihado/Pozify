@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from pozify.exercise_catalog import USER_SELECTABLE_EXERCISES
+from pozify.hf_spaces import default_spaces_gpu_duration, spaces_gpu
 from pozify.pipeline import run_pipeline
 
 BASE_DIR = Path(__file__).parent
@@ -187,6 +188,23 @@ def _profile_input(
     }
 
 
+def _analysis_gpu_duration(*_args: Any, **_kwargs: Any) -> int:
+    return default_spaces_gpu_duration()
+
+
+@spaces_gpu(duration=_analysis_gpu_duration)
+def _run_analysis_pipeline(
+    video_path: str | None,
+    profile_input: dict[str, Any],
+    progress: Any | None = None,
+) -> dict[str, Any]:
+    return run_pipeline(
+        video_path=video_path,
+        profile_input=profile_input,
+        progress=progress,
+    )
+
+
 async def _save_upload(video: UploadFile | None) -> str | None:
     video_path: str | None = None
     if video is not None and video.filename:
@@ -254,7 +272,7 @@ async def analyze_api(
     )
     video_path = await _save_upload(video)
     try:
-        result = run_pipeline(video_path=video_path, profile_input=profile)
+        result = _run_analysis_pipeline(video_path, profile)
     finally:
         if video_path is not None:
             Path(video_path).unlink(missing_ok=True)
@@ -285,11 +303,7 @@ async def analyze_stream_api(
 
     def worker() -> None:
         try:
-            result = run_pipeline(
-                video_path=video_path,
-                profile_input=profile,
-                progress=events.put,
-            )
+            result = _run_analysis_pipeline(video_path, profile, events.put)
             events.put({"type": "complete", "result": _analysis_response(result)})
         except Exception as exc:  # pragma: no cover - surfaced to browser clients
             events.put({"type": "error", "detail": str(exc)})

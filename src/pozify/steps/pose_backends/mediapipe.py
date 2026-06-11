@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 from urllib.request import urlretrieve
 
+from pozify.hf_spaces import zero_gpu_enabled
 from pozify.steps.pose_backends.base import PoseDetection
 from pozify.steps.pose_backends.landmarks import landmark_list_to_dict
 
@@ -75,9 +76,19 @@ class _MediaPipeTasksPoseAdapter:
         self._landmarker = self._create_landmarker(model_path)
 
     def _create_landmarker(self, model_path: Path) -> Any:
+        delegate = self._preferred_delegate()
+        try:
+            return self._create_landmarker_with_delegate(model_path, delegate)
+        except Exception:
+            cpu_delegate = self._cpu_delegate()
+            if delegate == cpu_delegate:
+                raise
+            return self._create_landmarker_with_delegate(model_path, cpu_delegate)
+
+    def _create_landmarker_with_delegate(self, model_path: Path, delegate: Any) -> Any:
         base_options = self._mp.tasks.BaseOptions(
             model_asset_path=str(model_path),
-            delegate=self._mp.tasks.BaseOptions.Delegate.CPU,
+            delegate=delegate,
         )
         options = self._mp.tasks.vision.PoseLandmarkerOptions(
             base_options=base_options,
@@ -88,6 +99,16 @@ class _MediaPipeTasksPoseAdapter:
             min_tracking_confidence=0.5,
         )
         return self._mp.tasks.vision.PoseLandmarker.create_from_options(options)
+
+    def _preferred_delegate(self) -> Any:
+        if not zero_gpu_enabled():
+            return self._cpu_delegate()
+
+        delegate = self._mp.tasks.BaseOptions.Delegate
+        return getattr(delegate, "GPU", self._cpu_delegate())
+
+    def _cpu_delegate(self) -> Any:
+        return self._mp.tasks.BaseOptions.Delegate.CPU
 
     def process(self, rgb_frame: Any) -> Any:
         image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb_frame)

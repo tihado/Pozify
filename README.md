@@ -69,6 +69,22 @@ Backend implementations live in `src/pozify/steps/pose_backends/` and return the
 `mmpose` backend class is included as the integration point for OpenMMLab MMPose; implementing it
 requires installing MMPose/MMCV and mapping model keypoints into the shared landmark dictionary.
 
+## Hugging Face ZeroGPU
+
+When this app runs on a Hugging Face Space with ZeroGPU hardware selected, the API analysis path is
+wrapped with `spaces.GPU`. The same code path is effect-free outside ZeroGPU, so local runs and CPU
+Spaces continue to use CPU by default.
+
+The runtime uses these defaults:
+
+- `SPACES_ZERO_GPU=1`: set by Hugging Face ZeroGPU; enables CUDA for the Torch exercise router.
+- `POZIFY_ROUTER_DEVICE`: optional override for router inference, for example `cpu` or `cuda`.
+- `POZIFY_SPACES_GPU_DURATION`: optional `spaces.GPU` duration in seconds, default `120`.
+
+The MediaPipe Tasks backend tries its GPU delegate on ZeroGPU and falls back to CPU if unavailable.
+The older `mp.solutions.pose` path remains CPU-only. The ZeroGPU wrapper is in place for the full
+analysis call and any CUDA-capable router or future pose backend used inside that call.
+
 When running in real mode, the UI summary now shows:
 
 - `Analysis mode`: `mock` or `real`

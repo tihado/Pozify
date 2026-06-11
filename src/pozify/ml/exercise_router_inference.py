@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from pozify.hf_spaces import router_torch_device
 from pozify.ml.exercise_router_features import ROUTER_LABELS, RouterWindow
 from pozify.ml.exercise_router_temporal import TorchTemporalRouter
 
@@ -162,7 +163,11 @@ def _load_temporal_router_model_file(path: Path) -> RouterModelBundle:
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     labels = _labels_from_artifact(checkpoint.get("labels"), checkpoint)
-    model = TorchTemporalRouter(checkpoint=checkpoint, labels=labels)
+    model = TorchTemporalRouter(
+        checkpoint=checkpoint,
+        labels=labels,
+        device=router_torch_device(),
+    )
     return RouterModelBundle(
         model=model,
         labels=labels,

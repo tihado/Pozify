@@ -16,6 +16,7 @@ dependencies = [
     # HF Spaces installs gradio[mcp,oauth], which requires pydantic<=2.12.5.
     "pydantic>=2.11.10,<=2.12.5",
     "scikit-learn>=1.4.0",
+    "spaces>=0.40.0",
     "torch==2.11.0",
 ]
 

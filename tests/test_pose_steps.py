@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pozify.contracts import PoseFrame, PoseSequence, VideoManifest
 from pozify.steps import pose_cleaning, pose_landmarker
 from pozify.steps.pose_backends import PoseDetection, landmark_list_to_dict
+from pozify.steps.pose_backends.mediapipe import _MediaPipeTasksPoseAdapter
 
 
 def _landmark(
@@ -224,6 +225,67 @@ class PoseStepTests(unittest.TestCase):
         self.assertEqual(len(sequence.frames[0].landmarks), 33)
         self.assertEqual(sequence.frames[0].pose_quality["source"], "mediapipe_pose")
         self.assertTrue(cleaned.normalized)
+
+
+class MediaPipeTasksDelegateTests(unittest.TestCase):
+    def _fake_mediapipe(self, *, fail_gpu: bool = False) -> SimpleNamespace:
+        class Delegate:
+            CPU = "cpu"
+            GPU = "gpu"
+
+        class BaseOptions:
+            def __init__(self, *, model_asset_path: str, delegate: str) -> None:
+                self.model_asset_path = model_asset_path
+                self.delegate = delegate
+
+        BaseOptions.Delegate = Delegate
+
+        class PoseLandmarkerOptions:
+            def __init__(self, *, base_options: BaseOptions, **_kwargs: object) -> None:
+                self.base_options = base_options
+
+        class PoseLandmarker:
+            @staticmethod
+            def create_from_options(options: PoseLandmarkerOptions) -> object:
+                if fail_gpu and options.base_options.delegate == "gpu":
+                    raise RuntimeError("gpu delegate unavailable")
+                return SimpleNamespace(delegate=options.base_options.delegate)
+
+        return SimpleNamespace(
+            tasks=SimpleNamespace(
+                BaseOptions=BaseOptions,
+                vision=SimpleNamespace(
+                    PoseLandmarkerOptions=PoseLandmarkerOptions,
+                    PoseLandmarker=PoseLandmarker,
+                    RunningMode=SimpleNamespace(IMAGE="image"),
+                ),
+            )
+        )
+
+    def _adapter(self, fake_mediapipe: SimpleNamespace) -> _MediaPipeTasksPoseAdapter:
+        adapter = object.__new__(_MediaPipeTasksPoseAdapter)
+        adapter._mp = fake_mediapipe
+        return adapter
+
+    def test_mediapipe_tasks_prefers_cpu_outside_zero_gpu(self) -> None:
+        adapter = self._adapter(self._fake_mediapipe())
+
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(adapter._preferred_delegate(), "cpu")
+
+    def test_mediapipe_tasks_prefers_gpu_inside_zero_gpu(self) -> None:
+        adapter = self._adapter(self._fake_mediapipe())
+
+        with patch.dict(os.environ, {"SPACES_ZERO_GPU": "1"}, clear=True):
+            self.assertEqual(adapter._preferred_delegate(), "gpu")
+
+    def test_mediapipe_tasks_falls_back_to_cpu_when_gpu_delegate_fails(self) -> None:
+        adapter = self._adapter(self._fake_mediapipe(fail_gpu=True))
+
+        with patch.dict(os.environ, {"SPACES_ZERO_GPU": "1"}, clear=True):
+            landmarker = adapter._create_landmarker(Path("pose.task"))
+
+        self.assertEqual(landmarker.delegate, "cpu")
 
 
 if __name__ == "__main__":
