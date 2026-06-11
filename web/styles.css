@@ -399,6 +399,36 @@ input[type="text"]:focus,
   box-shadow: 0 0 0 5px rgba(190, 104, 75, 0.14);
 }
 
+.scan-insights {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.scan-insight {
+  min-width: 0;
+  border: 1px solid rgba(37, 44, 31, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 253, 247, 0.74);
+}
+
+.scan-insight span,
+.scan-insight small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.scan-insight strong {
+  display: block;
+  overflow-wrap: anywhere;
+  margin: 4px 0;
+  color: var(--forest-deep);
+  font-size: 1.04rem;
+}
+
 .result-stage {
   display: grid;
   min-height: 470px;
@@ -768,6 +798,7 @@ td {
   .note-grid,
   .stat-grid,
   .metric-grid,
+  .scan-insights,
   .rep-grid,
   .issue-card-grid {
     grid-template-columns: 1fr;
