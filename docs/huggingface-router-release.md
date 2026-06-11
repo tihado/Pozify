@@ -12,10 +12,10 @@ Official references:
 
 ## Repository Setup
 
-Choose a model repository name under your Hugging Face account, for example:
+The configured model repository is:
 
 ```text
-<huggingface-username>/pozify-exercise-router
+NLag/pozify-exercise-router
 ```
 
 Create a user access token at:
@@ -53,7 +53,7 @@ Upload the model card and artifacts:
 
 ```bash
 uv run python scripts/upload_exercise_router_to_hf.py \
-  --repo-id <huggingface-username>/pozify-exercise-router \
+  --repo-id NLag/pozify-exercise-router \
   --private
 ```
 
@@ -72,7 +72,7 @@ The upload script creates the repository if needed and uploads:
 Set the model repository ID for runtime loading:
 
 ```bash
-export POZIFY_ROUTER_HF_REPO_ID=<huggingface-username>/pozify-exercise-router
+export POZIFY_ROUTER_HF_REPO_ID=NLag/pozify-exercise-router
 ```
 
 Optional:

@@ -265,7 +265,8 @@ can choose the intended active artifact even if multiple artifacts exist.
 
 To publish and load the router from Hugging Face, use the setup notes in
 [docs/huggingface-router-release.md](docs/huggingface-router-release.md). The draft model card is in
-[docs/huggingface-router-model-card.md](docs/huggingface-router-model-card.md).
+[docs/huggingface-router-model-card.md](docs/huggingface-router-model-card.md). The current model
+repository is `NLag/pozify-exercise-router`.
 
 Custom unknown clips can be uploaded into the data volume at `/data/raw/custom_unknown/` before the
 `features` stage. Use consented clips only; useful unknown examples include idle standing, walking
