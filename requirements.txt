@@ -102,6 +102,7 @@ huggingface-hub==1.18.0
     # via
     #   gradio
     #   gradio-client
+    #   pozify
 hyperframe==6.1.0
     # via h2
 idna==3.18
