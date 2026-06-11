@@ -26,6 +26,9 @@ def _user_visible_fallback_notes(verification_notes: list[str]) -> list[str]:
     visible_notes: list[str] = []
     hidden_fragments = (
         "requires transformers",
+        "requires llama-cpp-python",
+        "requires huggingface_hub",
+        "failed to download the configured gguf",
         "provider failed before verification",
         "out of memory",
         "mps backend",

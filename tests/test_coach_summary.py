@@ -109,6 +109,7 @@ class CoachSummaryTests(unittest.TestCase):
             verification_notes=[
                 "Summary provider failed before verification.",
                 "The local SLM summary backend requires transformers. Install the optional summary dependencies before using POZIFY_SUMMARY_PROVIDER=slm_local.",
+                "The GGUF summary backend requires llama-cpp-python. Install the optional summary dependencies before using POZIFY_SUMMARY_BACKEND=gguf.",
                 "Conservative fallback summary returned.",
             ],
             mock_steps=[],
@@ -116,6 +117,7 @@ class CoachSummaryTests(unittest.TestCase):
 
         joined = " ".join(fallback.confidence_notes).lower()
         self.assertNotIn("requires transformers", joined)
+        self.assertNotIn("requires llama-cpp-python", joined)
         self.assertNotIn("provider failed before verification", joined)
         self.assertIn("fallback summary", joined)
 

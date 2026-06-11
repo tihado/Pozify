@@ -80,17 +80,42 @@ To enable a real local summary model, install the optional dependencies first:
 uv sync --extra summary
 ```
 
-This installs the Python-side runtime needed for the local SLM path, including `transformers`.
-The repo already includes `torch` in the base dependencies. The first run may still download the
-configured model weights from Hugging Face if they are not already present in the local cache.
+This installs the Python-side runtime needed for the local SLM path, including `transformers` and
+`llama-cpp-python`. The repo already includes `torch` in the base dependencies. The first run may
+still download the configured model weights from Hugging Face if they are not already present in
+the local cache.
 
-Then run the app with the local SLM provider enabled:
+You can run the local SLM path with either the `transformers` backend or the lighter GGUF backend.
+
+Example: `transformers` backend with Qwen 2.5 3B:
 
 ```bash
 POZIFY_MOCK_MODE=0 \
 POZIFY_SUMMARY_PROVIDER=slm_local \
 POZIFY_SUMMARY_BACKEND=transformers \
 POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct \
+uv run python app.py
+```
+
+Example: GGUF backend with a quantized Qwen 2.5 3B model:
+
+```bash
+POZIFY_MOCK_MODE=0 \
+POZIFY_SUMMARY_PROVIDER=slm_local \
+POZIFY_SUMMARY_BACKEND=gguf \
+POZIFY_SUMMARY_MODEL=bartowski/Qwen2.5-3B-Instruct-GGUF \
+POZIFY_SUMMARY_GGUF_FILENAME=Qwen2.5-3B-Instruct-Q4_K_M.gguf \
+uv run python app.py
+```
+
+If you already have a local GGUF file, point directly to it instead of downloading from Hugging
+Face:
+
+```bash
+POZIFY_MOCK_MODE=0 \
+POZIFY_SUMMARY_PROVIDER=slm_local \
+POZIFY_SUMMARY_BACKEND=gguf \
+POZIFY_SUMMARY_GGUF_PATH=/absolute/path/to/Qwen2.5-3B-Instruct-Q4_K_M.gguf \
 uv run python app.py
 ```
 
@@ -101,22 +126,31 @@ summary path.
 Relevant summary environment variables:
 
 - `POZIFY_SUMMARY_PROVIDER=template|mock|unsafe_mock|slm_local`
-- `POZIFY_SUMMARY_BACKEND=transformers`
-- `POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct`
+- `POZIFY_SUMMARY_BACKEND=transformers|gguf`
+- `POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct` for `transformers`
+- `POZIFY_SUMMARY_MODEL=bartowski/Qwen2.5-3B-Instruct-GGUF` for `gguf`
+- `POZIFY_SUMMARY_GGUF_FILENAME=Qwen2.5-3B-Instruct-Q4_K_M.gguf`
+- `POZIFY_SUMMARY_GGUF_PATH=/absolute/path/to/model.gguf`
 - `POZIFY_SUMMARY_DEVICE=cpu|mps|cuda|auto`
 - `POZIFY_SUMMARY_MAX_TOKENS=512`
 - `POZIFY_SUMMARY_TEMPERATURE=0.2`
+- `POZIFY_SUMMARY_CONTEXT_WINDOW=4096`
+- `POZIFY_SUMMARY_THREADS=0`
+- `POZIFY_SUMMARY_GPU_LAYERS=0`
 
 For stability on Apple Silicon, the local summary backend defaults to `POZIFY_SUMMARY_DEVICE=cpu`.
 This avoids common MPS out-of-memory failures during summary generation. If you explicitly want to
 try Metal acceleration, set `POZIFY_SUMMARY_DEVICE=mps`.
 
+For the GGUF backend, `POZIFY_SUMMARY_DEVICE` does not apply. Use `POZIFY_SUMMARY_GPU_LAYERS` if
+your local `llama-cpp-python` build supports GPU offload.
+
 To verify that the run actually used the SLM provider, inspect the `JSON` tab or
 `summary_generation.json` and confirm:
 
 - `summary_provider` is `slm_local`
-- `summary_backend` is `transformers`
-- `summary_model` is `Qwen/Qwen2.5-3B-Instruct` or your configured model
+- `summary_backend` is `transformers` or `gguf`
+- `summary_model` matches your configured model or GGUF repo/file pair
 
 If you instead see:
 

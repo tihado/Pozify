@@ -64,6 +64,25 @@ class AnnotatedRendererTests(unittest.TestCase):
         writer.release()
         return path
 
+    def _browser_playable_run(
+        self,
+        manifest: VideoManifest,
+        pose_sequence: PoseSequence,
+        reps: Reps,
+        issues: IssueMarkers,
+    ) -> annotated_renderer.RenderArtifacts:
+        with (
+            mock.patch.object(annotated_renderer, "PREFERRED_VIDEO_CODECS", ("mp4v",)),
+            mock.patch.object(annotated_renderer, "_browser_compatible_output", return_value=True),
+        ):
+            return annotated_renderer.run(
+                manifest,
+                pose_sequence,
+                reps,
+                issues,
+                Path(self.temp_dir.name),
+            )
+
     def test_renderer_writes_annotated_video(self) -> None:
         video_path = self._write_video()
         manifest = VideoManifest(
@@ -93,12 +112,11 @@ class AnnotatedRendererTests(unittest.TestCase):
             partial_reps=[],
         )
 
-        result = annotated_renderer.run(
+        result = self._browser_playable_run(
             manifest,
             pose_sequence,
             reps,
             IssueMarkers(issues=[]),
-            Path(self.temp_dir.name),
         )
 
         self.assertIsNotNone(result.annotated_video_path)
@@ -155,12 +173,11 @@ class AnnotatedRendererTests(unittest.TestCase):
             ]
         )
 
-        result = annotated_renderer.run(
+        result = self._browser_playable_run(
             manifest,
             pose_sequence,
             reps,
             issues,
-            Path(self.temp_dir.name),
         )
 
         self.assertIsNotNone(result.annotated_video_path)
