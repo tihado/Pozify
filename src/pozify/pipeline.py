@@ -205,10 +205,11 @@ def run_pipeline(
     )
     analysis_mode = "mock" if mock_mode else "real"
     mock_steps = [
-        "exercise_classifier",
         "coach_summary",
         "verifier",
     ]
+    if mock_mode:
+        mock_steps.insert(0, "exercise_classifier")
 
     summary = coach_summary.run(profile, classification, reps, analysis, variation, issues)
     write_artifact("coach_summary.json", summary)

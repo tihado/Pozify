@@ -27,6 +27,16 @@ function label(value) {
   return value.replaceAll("_", " ");
 }
 
+async function readResponseBody(response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) return JSON.parse(text);
+
+  return { detail: text };
+}
+
 function Field({ labelText, children, full = false }) {
   return h(
     "label",

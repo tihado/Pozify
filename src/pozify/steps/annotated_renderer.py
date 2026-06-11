@@ -28,7 +28,7 @@ SKELETON_EDGES = [
     ("right_knee", "right_ankle"),
 ]
 
-PREFERRED_VIDEO_CODECS = ("avc1", "H264", "mp4v")
+PREFERRED_VIDEO_CODECS = ("mp4v", "avc1", "H264")
 HDR_TRANSFERS = {"arib-std-b67", "smpte2084"}
 HDR_PRIMARIES = {"bt2020"}
 BT709_COLOR_ARGS = (

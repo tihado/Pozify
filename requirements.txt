@@ -2,6 +2,12 @@
 #    uv export --format requirements.txt --no-dev --no-hashes --frozen --output-file requirements.txt
 absl-py==2.4.0
     # via mediapipe
+aiohappyeyeballs==2.6.2
+    # via aiohttp
+aiohttp==3.14.1
+    # via modal
+aiosignal==1.4.0
+    # via aiohttp
 annotated-doc==0.0.4
     # via
     #   fastapi
@@ -13,20 +19,27 @@ anyio==4.13.0
     #   gradio
     #   httpx
     #   starlette
+    #   watchfiles
+attrs==26.1.0
+    # via aiohttp
 audioop-lts==0.2.2 ; python_full_version >= '3.13'
     # via gradio
 brotli==1.2.0
     # via gradio
+cbor2==6.1.2
+    # via modal
 certifi==2026.5.20
     # via
     #   httpcore
     #   httpx
     #   mediapipe
+    #   modal
 cffi==2.0.0
     # via sounddevice
 click==8.4.1
     # via
     #   huggingface-hub
+    #   modal
     #   typer
     #   uvicorn
 colorama==0.4.6 ; sys_platform == 'win32'
@@ -47,6 +60,10 @@ flatbuffers==25.12.19
     # via mediapipe
 fonttools==4.63.0
     # via matplotlib
+frozenlist==1.8.0
+    # via
+    #   aiohttp
+    #   aiosignal
 fsspec==2026.4.0
     # via
     #   gradio-client
@@ -59,14 +76,20 @@ gradio-client==2.5.0
     #   hf-gradio
 groovy==0.1.2
     # via gradio
+grpclib==0.4.9
+    # via modal
 h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
+h2==4.3.0
+    # via grpclib
 hf-gradio==0.4.1
     # via gradio
 hf-xet==1.5.1 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
     # via huggingface-hub
+hpack==4.1.0
+    # via h2
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
@@ -79,12 +102,20 @@ huggingface-hub==1.18.0
     # via
     #   gradio
     #   gradio-client
+    #   pozify
+hyperframe==6.1.0
+    # via h2
 idna==3.18
     # via
     #   anyio
     #   httpx
+    #   yarl
 jinja2==3.1.6
     # via gradio
+joblib==1.5.3
+    # via
+    #   pozify
+    #   scikit-learn
 kiwisolver==1.5.0
     # via matplotlib
 markdown-it-py==4.2.0
@@ -99,6 +130,15 @@ mdurl==0.1.2
     # via markdown-it-py
 mediapipe==0.10.35
     # via pozify
+modal==1.5.0
+    # via pozify
+multidict==6.7.1
+    # via
+    #   aiohttp
+    #   grpclib
+    #   yarl
+narwhals==2.22.1
+    # via scikit-learn
 numpy==1.26.4
     # via
     #   contourpy
@@ -109,6 +149,8 @@ numpy==1.26.4
     #   opencv-python-headless
     #   pandas
     #   pozify
+    #   scikit-learn
+    #   scipy
 opencv-contrib-python==4.11.0.86
     # via mediapipe
 opencv-python-headless==4.11.0.86
@@ -129,6 +171,12 @@ pillow==12.2.0
     # via
     #   gradio
     #   matplotlib
+propcache==0.5.2
+    # via
+    #   aiohttp
+    #   yarl
+protobuf==6.33.6
+    # via modal
 pycparser==3.0 ; implementation_name != 'PyPy'
     # via cffi
 pydantic==2.12.5
@@ -159,9 +207,15 @@ pyyaml==6.0.3
     #   gradio
     #   huggingface-hub
 rich==15.0.0
-    # via typer
+    # via
+    #   modal
+    #   typer
 safehttpx==0.1.7
     # via gradio
+scikit-learn==1.9.0
+    # via pozify
+scipy==1.17.1
+    # via scikit-learn
 semantic-version==2.10.0
     # via gradio
 shellingham==1.5.4
@@ -174,6 +228,12 @@ starlette==1.2.1
     # via
     #   fastapi
     #   gradio
+synchronicity==0.12.3
+    # via modal
+threadpoolctl==3.6.0
+    # via scikit-learn
+toml==0.10.2
+    # via modal
 tomlkit==0.14.0
     # via gradio
 tqdm==4.68.2
@@ -183,16 +243,24 @@ typer==0.25.1
     #   gradio
     #   hf-gradio
     #   huggingface-hub
+types-certifi==2021.10.8.3
+    # via modal
+types-toml==0.10.8.20260518
+    # via modal
 typing-extensions==4.15.0
     # via
+    #   aiohttp
+    #   aiosignal
     #   anyio
     #   fastapi
     #   gradio
     #   gradio-client
     #   huggingface-hub
+    #   modal
     #   pydantic
     #   pydantic-core
     #   starlette
+    #   synchronicity
     #   typing-inspection
 typing-inspection==0.4.2
     # via
@@ -202,3 +270,7 @@ tzdata==2026.2 ; python_full_version >= '3.14' or sys_platform == 'emscripten' o
     # via pandas
 uvicorn==0.49.0
     # via gradio
+watchfiles==1.2.0
+    # via modal
+yarl==1.24.2
+    # via aiohttp

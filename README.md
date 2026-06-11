@@ -214,6 +214,65 @@ Recommended replacement order:
 7. `annotated_renderer.py`: render skeleton overlays and issue highlights.
 8. `coach_summary.py`: call the selected small language model with retrieved knowledge cards.
 
+## Exercise Router Training
+
+Issue 4 adds a real exercise router path for `squat`, `push_up`, `shoulder_press`, and `unknown`.
+Runtime inference stays local: `src/pozify/steps/exercise_classifier.py` looks for a trained artifact
+under `models/exercise_router/active/` and falls back to `unknown` with `fallback_required=true`
+when no model is present or confidence is too low.
+
+Modal is used for dataset ingestion, batch feature extraction, and training:
+
+```bash
+uv run modal setup
+uv run modal run scripts/exercise_router_modal.py --stage ingest
+uv run modal run scripts/exercise_router_modal.py --stage features
+uv run modal run scripts/exercise_router_modal.py --stage train-baseline
+uv run modal run scripts/exercise_router_modal.py --stage train-temporal
+uv run modal run scripts/exercise_router_modal.py --stage evaluate
+```
+
+The latest training metrics and selected-artifact result are recorded in
+[docs/exercise-router-training-report.md](docs/exercise-router-training-report.md).
+Custom data collection is documented in
+[docs/custom-data-collection-guide.md](docs/custom-data-collection-guide.md). Demo clips are listed
+in [demo/README.md](demo/README.md).
+
+The Modal app uses:
+
+- `pozify-router-data` for raw videos, manifests, and feature caches.
+- `pozify-router-models` for `baseline.joblib`, `temporal.pt`, `evaluation.json`, and the selected
+  router artifact.
+
+The baseline trains a scikit-learn model over engineered window vectors. The temporal stage trains a
+compact BiLSTM over 30-frame feature tensors on a Modal A10 GPU and writes `temporal.pt` plus
+`temporal_metrics.json`. Its default hyperparameters follow the Riccio exercise-classification paper:
+73 hidden units, 0.2174 dropout, 0.0004 learning rate, batch size 54, and 73 epochs
+(https://arxiv.org/abs/2411.11548). Evaluation scores every available trained artifact, writes
+per-model metrics into `evaluation.json`, and records the active artifact in `router_selection.json`.
+Baseline wins ties to keep runtime inference lightweight unless the temporal model clearly improves
+the metrics.
+
+Download the selected artifact and its selection file after evaluation, then place them under:
+
+```text
+models/exercise_router/active/
+```
+
+For the baseline this directory should contain `router.joblib`; for the temporal model it should
+contain `router.pt`. In both cases, include `router_selection.json` when present so the local loader
+can choose the intended active artifact even if multiple artifacts exist.
+
+To publish and load the router from Hugging Face, use the setup notes in
+[docs/huggingface-router-release.md](docs/huggingface-router-release.md). The draft model card is in
+[docs/huggingface-router-model-card.md](docs/huggingface-router-model-card.md). The current model
+repository is `NLag/pozify-exercise-router`.
+
+Custom unknown clips can be uploaded into the data volume at `/data/raw/custom_unknown/` before the
+`features` stage. Use consented clips only; useful unknown examples include idle standing, walking
+into frame, setup motion, stretching, bad camera angle, and partial/unsupported reps. Unsupported
+classes from the Riccio dataset, such as bicep curl, are mapped to `unknown`.
+
 ## Development Checks
 
 ```bash
