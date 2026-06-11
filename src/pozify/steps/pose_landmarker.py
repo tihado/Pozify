@@ -8,6 +8,7 @@ import cv2
 
 from pozify.contracts import PoseFrame, PoseSequence, VideoManifest
 from pozify.steps.pose_backends import (
+    LANDMARK_SCHEMA,
     MockPoseBackend,
     PoseBackend,
     create_pose_backend,
@@ -104,6 +105,14 @@ def _pose_quality(landmarks: dict[str, dict[str, float]]) -> dict[str, Any]:
     }
 
 
+def _coordinate_source(detection_source: str, world_landmarks: dict[str, dict[str, float]]) -> str:
+    if not world_landmarks:
+        return "image_landmarks"
+    if detection_source.startswith("mediapipe"):
+        return "mediapipe_world_landmarks"
+    return "world_landmarks"
+
+
 def _empty_sequence() -> PoseSequence:
     return PoseSequence(
         frames=[], normalized=False, smoothing_method="none", pose_valid_ratio=0.0
@@ -134,6 +143,10 @@ def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequ
                     pose_quality={
                         **_pose_quality(detection.landmarks),
                         "source": detection.source,
+                        "landmark_schema": LANDMARK_SCHEMA,
+                        "coordinate_source": _coordinate_source(
+                            detection.source, detection.world_landmarks
+                        ),
                     },
                 )
             )
@@ -166,6 +179,8 @@ def _run_mock(manifest: VideoManifest) -> PoseSequence:
                     **_pose_quality(detection.landmarks),
                     "source": detection.source,
                     "mock": True,
+                    "landmark_schema": LANDMARK_SCHEMA,
+                    "coordinate_source": "mock_landmarks",
                 },
             )
         )

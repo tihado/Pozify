@@ -81,7 +81,7 @@ class PoseStepTests(unittest.TestCase):
         writer.release()
         return path
 
-    def test_pose_landmarker_keeps_all_33_landmarks_and_quality(self) -> None:
+    def test_pose_landmarker_maps_to_coco17_landmarks_and_quality(self) -> None:
         path = self._write_video()
         manifest = VideoManifest(
             video_path=str(path),
@@ -101,10 +101,12 @@ class PoseStepTests(unittest.TestCase):
         sequence = pose_landmarker.run(manifest, backend=_FakePose())
 
         self.assertEqual(len(sequence.frames), 4)
-        self.assertEqual(len(sequence.frames[0].landmarks), 33)
-        self.assertIn("left_foot_index", sequence.frames[0].landmarks)
-        self.assertEqual(len(sequence.frames[0].world_landmarks), 33)
+        self.assertEqual(len(sequence.frames[0].landmarks), 17)
+        self.assertIn("left_ankle", sequence.frames[0].landmarks)
+        self.assertNotIn("left_foot_index", sequence.frames[0].landmarks)
+        self.assertEqual(len(sequence.frames[0].world_landmarks), 17)
         self.assertEqual(sequence.frames[0].pose_quality["source"], "fake_pose")
+        self.assertEqual(sequence.frames[0].pose_quality["landmark_schema"], "coco17")
         self.assertGreater(sequence.frames[0].pose_quality["mean_visibility"], 0.9)
         self.assertTrue(sequence.frames[0].pose_quality["critical_landmarks_visible"])
         self.assertEqual(sequence.pose_valid_ratio, 1.0)
@@ -184,9 +186,9 @@ class PoseStepTests(unittest.TestCase):
         last = landmark_list_to_dict(last_landmarks)
         sequence = PoseSequence(
             frames=[
-                PoseFrame(0, 0.0, first, {}, {"mean_visibility": 0.9}),
+                PoseFrame(0, 0.0, first, first, {"mean_visibility": 0.9}),
                 PoseFrame(1, 0.033, {}, {}, {"mean_visibility": 0.0}),
-                PoseFrame(2, 0.067, last, {}, {"mean_visibility": 0.9}),
+                PoseFrame(2, 0.067, last, last, {"mean_visibility": 0.9}),
             ],
             normalized=False,
             smoothing_method="none",
@@ -204,6 +206,8 @@ class PoseStepTests(unittest.TestCase):
         self.assertIn("smoothed_x", shoulder)
         self.assertIn("normalized_x", shoulder)
         self.assertTrue(cleaned.frames[1].pose_quality["normalized"])
+        self.assertIn("smoothed_x", cleaned.frames[1].world_landmarks["left_shoulder"])
+        self.assertIn("normalized_z", cleaned.frames[1].world_landmarks["left_shoulder"])
 
     @unittest.skipUnless(
         os.getenv("POZIFY_RUN_REAL_POSE_TESTS") == "1",
@@ -222,7 +226,7 @@ class PoseStepTests(unittest.TestCase):
         self.assertTrue(manifest.analysis_allowed)
         self.assertGreater(len(sequence.frames), 0)
         self.assertGreater(sequence.pose_valid_ratio, 0.0)
-        self.assertEqual(len(sequence.frames[0].landmarks), 33)
+        self.assertEqual(len(sequence.frames[0].landmarks), 17)
         self.assertEqual(sequence.frames[0].pose_quality["source"], "mediapipe_pose")
         self.assertTrue(cleaned.normalized)
 

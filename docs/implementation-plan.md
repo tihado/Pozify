@@ -28,7 +28,7 @@ Deliverables:
 
 ## Phase 3: Pose Extraction And Cleaning
 
-Goal: convert videos into a clean 33-point pose sequence.
+Goal: convert videos into a clean 17-point 3D pose sequence.
 
 Deliverables:
 

@@ -33,7 +33,7 @@ Depth strategy:
 - Upload or record short workout videos.
 - User profile and training intent form.
 - Video quality check.
-- 33-point pose extraction.
+- 17-point 3D pose extraction.
 - Pose cleaning and normalization.
 - Exercise classifier for `squat`, `push_up`, `shoulder_press`, and `unknown`.
 - Exercise-specific rep counter.
@@ -79,7 +79,7 @@ Main pipeline:
 ```text
 user profile + input video
 -> video QC
--> 33-point pose landmarker
+-> 17-point 3D pose landmarker
 -> pose cleaning and normalization
 -> exercise classifier
 -> exercise-specific rep counter
@@ -98,7 +98,7 @@ End-to-end flow:
 flowchart TD
     A["User uploads or records workout video"] --> B["Video QC"]
     U["User profile and training intent"] --> G["Grounded coach summary"]
-    B --> C["33-point Pose Landmarker"]
+    B --> C["17-point 3D Pose Landmarker"]
     C --> D["Pose cleaning and normalization"]
     D --> E["Exercise classifier"]
     E --> F{"Exercise type"}
@@ -402,7 +402,7 @@ Current implementation:
 
 - Returns mocked video metadata and warnings.
 
-### Step 2: 33-Point Pose Landmarker
+### Step 2: 17-Point 3D Pose Landmarker
 
 Goal:
 
@@ -415,8 +415,8 @@ Recommended model:
 Reasons:
 
 - Works on decoded video frames.
-- Outputs 33 pose landmarks.
-- Provides image coordinates and optional world coordinates.
+- Outputs COCO-17 body landmarks.
+- Provides image coordinates for rendering and world coordinates for 3D exercise metrics.
 - Practical for a Gradio Space.
 
 Fine-tuning:
@@ -431,8 +431,8 @@ Current implementation:
 Future implementation:
 
 - Run MediaPipe on sampled frames.
-- Store all 33 landmarks.
-- Store visibility and pose quality per frame.
+- Store all 17 COCO body landmarks.
+- Store visibility, pose quality, and 3D world coordinates per frame.
 
 ### Step 3: Pose Cleaning And Normalization
 
@@ -715,7 +715,7 @@ Recommended model:
 
 Role:
 
-- Extract 33 landmarks per valid frame.
+- Extract 17 COCO body landmarks per valid frame, with 3D world coordinates when available.
 
 Fine-tuning:
 

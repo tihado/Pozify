@@ -13,6 +13,10 @@ ARTIFACT_FILENAMES = (
     "router.joblib",
     "router_selection.json",
     "temporal.pt",
+    "evaluation.json",
+    "baseline_metrics.json",
+    "temporal_metrics.json",
+    "hf_upload.json",
 )
 
 

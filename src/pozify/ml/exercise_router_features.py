@@ -6,7 +6,13 @@ import math
 import numpy as np
 
 from pozify.contracts import PoseFrame, PoseSequence
-from pozify.steps.pose_backends.landmarks import LANDMARK_NAMES
+from pozify.steps.pose_backends.landmarks import LANDMARK_NAMES, LANDMARK_SCHEMA
+from pozify.steps.rep_signals import landmark_axis
+
+
+FEATURE_SCHEMA = "coco17_3d_v1"
+ROUTER_LANDMARK_SCHEMA = LANDMARK_SCHEMA
+ROUTER_INPUT_SIZE = 3 * (len(LANDMARK_NAMES) * 4 + 8 + 3)
 
 
 ROUTER_LABELS = ("squat", "push_up", "shoulder_press", "unknown")
@@ -77,9 +83,9 @@ def frame_feature_names() -> list[str]:
     for landmark in LANDMARK_NAMES:
         base_names.extend(
             [
-                f"{landmark}_normalized_x",
-                f"{landmark}_normalized_y",
-                f"{landmark}_normalized_z",
+                f"{landmark}_pose3d_x",
+                f"{landmark}_pose3d_y",
+                f"{landmark}_pose3d_z",
                 f"{landmark}_visibility",
             ]
         )
@@ -123,14 +129,16 @@ def _axis(values: dict[str, float] | None, axis: str) -> float:
 def _visibility(frame: PoseFrame, values: dict[str, float] | None) -> float:
     if values is not None and "visibility" in values:
         return max(0.0, min(1.0, float(values["visibility"])))
-    return max(0.0, min(1.0, float(frame.pose_quality.get("mean_visibility", 0.0))))
+    return 0.0
 
 
-def _point(frame: PoseFrame, name: str) -> tuple[float, float] | None:
-    values = frame.landmarks.get(name)
-    if values is None:
+def _point(frame: PoseFrame, name: str) -> tuple[float, float, float] | None:
+    x = landmark_axis(frame, name, "x")
+    y = landmark_axis(frame, name, "y")
+    z = landmark_axis(frame, name, "z")
+    if None in {x, y, z}:
         return None
-    return _axis(values, "x"), _axis(values, "y")
+    return float(x), float(y), float(z)
 
 
 def _distance(frame: PoseFrame, first: str, second: str) -> float | None:
@@ -138,7 +146,7 @@ def _distance(frame: PoseFrame, first: str, second: str) -> float | None:
     second_point = _point(frame, second)
     if first_point is None or second_point is None:
         return None
-    return math.hypot(first_point[0] - second_point[0], first_point[1] - second_point[1])
+    return math.sqrt(sum((first_point[index] - second_point[index]) ** 2 for index in range(3)))
 
 
 def _safe_ratio(numerator: float | None, denominator: float | None) -> float:
@@ -156,12 +164,16 @@ def _angle_deg(frame: PoseFrame, first: str, middle: str, last: str) -> float:
 
     abx = first_point[0] - middle_point[0]
     aby = first_point[1] - middle_point[1]
+    abz = first_point[2] - middle_point[2]
     cbx = last_point[0] - middle_point[0]
     cby = last_point[1] - middle_point[1]
-    denom = math.hypot(abx, aby) * math.hypot(cbx, cby)
+    cbz = last_point[2] - middle_point[2]
+    denom = math.sqrt(abx * abx + aby * aby + abz * abz) * math.sqrt(
+        cbx * cbx + cby * cby + cbz * cbz
+    )
     if denom <= 1e-6:
         return 0.0
-    cosine = max(-1.0, min(1.0, (abx * cbx + aby * cby) / denom))
+    cosine = max(-1.0, min(1.0, (abx * cbx + aby * cby + abz * cbz) / denom))
     return math.degrees(math.acos(cosine))
 
 
@@ -174,12 +186,13 @@ def _frame_mean_visibility(frame: PoseFrame) -> float:
 def frame_feature_vector(frame: PoseFrame) -> np.ndarray:
     values: list[float] = []
     for landmark in LANDMARK_NAMES:
-        landmark_values = frame.landmarks.get(landmark)
+        landmark_values = frame.world_landmarks.get(landmark) or frame.landmarks.get(landmark)
+        point = _point(frame, landmark)
         values.extend(
             [
-                _axis(landmark_values, "x"),
-                _axis(landmark_values, "y"),
-                _axis(landmark_values, "z"),
+                point[0] if point is not None else 0.0,
+                point[1] if point is not None else 0.0,
+                point[2] if point is not None else 0.0,
                 _visibility(frame, landmark_values),
             ]
         )
@@ -269,4 +282,3 @@ def extract_router_windows(
             )
         )
     return windows
-

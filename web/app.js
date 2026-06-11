@@ -912,7 +912,7 @@ function App() {
         h(
           "div",
           { className: "metric" },
-          h("strong", null, "33"),
+          h("strong", null, "17"),
           h("span", null, "pose landmarks"),
         ),
         h(

@@ -12,6 +12,7 @@ from pozify.exercises import create_exercise_strategy
 from pozify.exercises.push_up import PushUpExercise
 from pozify.exercises.shoulder_press import ShoulderPressExercise
 from pozify.exercises.squat import SquatExercise
+from pozify.steps.rep_signals import angle_deg
 
 
 def _frame(frame_index: int, landmarks: dict[str, dict[str, float]]) -> PoseFrame:
@@ -145,6 +146,21 @@ def _exercise_strategy(exercise: str, sequence: PoseSequence):
 
 
 class RepCounterTests(unittest.TestCase):
+    def test_angle_deg_uses_3d_world_landmarks(self) -> None:
+        frame = PoseFrame(
+            frame_index=0,
+            timestamp_sec=0.0,
+            landmarks={},
+            world_landmarks={
+                "left_shoulder": {"x": 1.0, "y": 0.0, "z": 0.0},
+                "left_elbow": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "left_wrist": {"x": 0.0, "y": 0.0, "z": 1.0},
+            },
+            pose_quality={"mean_visibility": 1.0},
+        )
+
+        self.assertEqual(round(angle_deg(frame, "left_shoulder", "left_elbow", "left_wrist") or 0.0), 90)
+
     def test_segments_squat_reps(self) -> None:
         sequence = _sequence_for_exercise("squat", 3)
         reps, debug = _exercise_strategy("squat", sequence).count()

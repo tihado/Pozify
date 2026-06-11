@@ -59,6 +59,17 @@ uv run python scripts/upload_exercise_router_to_hf.py \
 
 Omit `--private` if the model repository should be public.
 
+The Modal training script can also publish directly from the `pozify-router-models` volume after
+evaluation. It reads `HF_TOKEN`, `POZIFY_ROUTER_HF_REPO_ID`, and optional
+`POZIFY_ROUTER_HF_PRIVATE=1` from `.env` via `modal.Secret.from_dotenv()`:
+
+```bash
+uv run modal run scripts/exercise_router_modal.py --stage all
+uv run modal run scripts/exercise_router_modal.py --stage publish --repo-id build-small-hackathon/pozify-exercise-router
+```
+
+`stage evaluate` and `stage all` publish automatically after writing `router_selection.json`.
+
 The upload script creates the repository if needed and uploads:
 
 - `README.md` model card
@@ -66,6 +77,9 @@ The upload script creates the repository if needed and uploads:
 - `router_selection.json`
 - `temporal.pt`
 - `training_report.md`
+- `evaluation.json`
+- `baseline_metrics.json`
+- `temporal_metrics.json`
 
 ## Runtime Configuration
 
