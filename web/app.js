@@ -229,18 +229,58 @@ function RepsTab({ result }) {
 }
 
 function issueEvidence(issue) {
-  const entries = Object.entries(issue.evidence || {}).filter(
+  const degreeEntry = Object.entries(issue.evidence || {}).find(
     ([key, value]) =>
-      ![
-        "threshold",
-        "confidence",
-        "variation_context",
-        "supporting_frames",
-        "fallback",
-      ].includes(key) && typeof value !== "object",
+      key.endsWith("_deg") && typeof value === "number" && !Number.isNaN(value),
   );
-  const [metric, value] = entries[0] || ["metric", "n/a"];
-  return `${label(metric)} ${value} vs ${issue.evidence?.threshold ?? "n/a"}`;
+  if (degreeEntry) {
+    return `${label(degreeEntry[0].replace("_deg", ""))} about ${Math.round(degreeEntry[1])} deg`;
+  }
+
+  const cues = {
+    shallow_depth: "Lower the hips a little more before standing up",
+    hip_sag: "Keep hips in line with shoulders and ankles",
+    incomplete_depth: "Bend deeper at the bottom of the rep",
+    knee_valgus: "Keep knees tracking over the toes",
+    excessive_torso_lean: "Keep the chest taller through the bottom",
+    incomplete_lockout: "Finish by straightening the elbows",
+    asymmetry: "Keep both sides moving evenly",
+  };
+  return cues[issue.issue] || "Review this part of the rep";
+}
+
+function issueTitle(issue) {
+  const titles = {
+    shallow_depth: "Squat depth is shallow",
+    hip_sag: "Hips are dropping",
+    incomplete_depth: "Rep is not deep enough",
+    knee_valgus: "Knees are caving inward",
+    excessive_torso_lean: "Torso leans too far forward",
+    incomplete_lockout: "Lockout is incomplete",
+    asymmetry: "Left and right sides are uneven",
+  };
+  return titles[issue.issue] || label(issue.issue);
+}
+
+function issueFocus(issue) {
+  const focus = {
+    shallow_depth: "Focus on hips and knees",
+    hip_sag: "Focus on trunk and hips",
+    incomplete_depth: "Focus on shoulders, elbows, and wrists",
+    knee_valgus: "Focus on knees and ankles",
+    excessive_torso_lean: "Focus on chest and hips",
+    incomplete_lockout: "Focus on elbows and wrists",
+    asymmetry: "Focus on left-right balance",
+  };
+  if (focus[issue.issue]) return focus[issue.issue];
+  return `Focus on ${issue.affected_joints.map(label).join(", ")}`;
+}
+
+function severityText(issue) {
+  const severity = Math.round(issue.severity * 100);
+  if (severity >= 70) return `high attention ${severity}%`;
+  if (severity >= 40) return `moderate attention ${severity}%`;
+  return `minor attention ${severity}%`;
 }
 
 function thumbnailForIssue(result, issue, index) {
@@ -331,7 +371,7 @@ function IssuesTab({ result }) {
               h(
                 "div",
                 { className: "timeline-main" },
-                h("strong", null, label(issue.issue)),
+                h("strong", null, issueTitle(issue)),
                 h("span", null, issueClipText(result, issue, index)),
                 h(
                   "span",
@@ -342,18 +382,14 @@ function IssuesTab({ result }) {
               h(
                 "div",
                 { className: "timeline-meta" },
+                h("span", null, severityText(issue)),
                 h(
                   "span",
                   null,
-                  `severity ${Math.round(issue.severity * 100)}%`,
-                ),
-                h(
-                  "span",
-                  null,
-                  `confidence ${percent(issue.evidence?.confidence)}`,
+                  `evidence confidence ${percent(issue.evidence?.confidence)}`,
                 ),
                 h("span", null, issueEvidence(issue)),
-                h("span", null, issue.affected_joints.map(label).join(", ")),
+                h("span", null, issueFocus(issue)),
               ),
             ),
           ),
