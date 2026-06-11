@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 
+import joblib
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify.contracts import PoseFrame, PoseSequence, UserProfile, validate_contract
-from pozify.ml.exercise_router_evaluation import evaluate_router_predictions
+from pozify.ml.exercise_router_evaluation import evaluate_router_predictions, select_router_candidate
 from pozify.ml.exercise_router_features import (
     ROUTER_LABELS,
     extract_router_windows,
@@ -22,6 +24,7 @@ from pozify.ml.exercise_router_inference import (
     RouterModelBundle,
     WindowRouterPrediction,
     aggregate_window_predictions,
+    load_router_model,
 )
 from pozify.steps import exercise_classifier
 from pozify.steps.pose_backends.landmarks import LANDMARK_NAMES
@@ -187,6 +190,39 @@ class ExerciseRouterAggregationTests(unittest.TestCase):
         self.assertEqual(aggregate_window_predictions(inconsistent).label, "unknown")
 
 
+class ExerciseRouterModelLoadingTests(unittest.TestCase):
+    def test_selection_file_controls_active_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir)
+            artifact_path = model_dir / "selected.joblib"
+            joblib.dump(
+                {
+                    "model": _FakePushUpModel(),
+                    "labels": ["unknown", "squat", "push_up", "shoulder_press"],
+                    "model_kind": "baseline",
+                },
+                artifact_path,
+            )
+            (model_dir / "router_selection.json").write_text(
+                json.dumps({"selected_artifact": artifact_path.name}),
+                encoding="utf-8",
+            )
+
+            bundle = load_router_model(model_dir)
+
+        self.assertIsNotNone(bundle)
+        assert bundle is not None
+        self.assertEqual(bundle.labels, tuple(ROUTER_LABELS))
+        result = exercise_classifier.run(
+            _sequence("push_up"),
+            _profile("auto"),
+            mock=False,
+            model_bundle=bundle,
+        )
+        self.assertEqual(result.exercise, "push_up")
+        self.assertFalse(result.fallback_required)
+
+
 class ExerciseClassifierStepTests(unittest.TestCase):
     def test_manual_override_bypasses_model_and_validates_contract(self) -> None:
         result = exercise_classifier.run(
@@ -261,6 +297,18 @@ class ExerciseRouterEvaluationTests(unittest.TestCase):
         self.assertEqual(evaluation.accuracy, 0.75)
         self.assertEqual(evaluation.confusion_matrix["shoulder_press"]["unknown"], 1)
         self.assertEqual(evaluation.unknown_rejection_rate, 1.0)
+
+    def test_selects_temporal_only_when_metrics_win(self) -> None:
+        baseline = {"name": "baseline", "accuracy": 0.91, "unknown_rejection_rate": 0.8}
+        temporal = {"name": "temporal", "accuracy": 0.92, "unknown_rejection_rate": 0.7}
+
+        self.assertEqual(select_router_candidate([baseline, temporal]), temporal)
+
+    def test_selects_baseline_on_metric_tie(self) -> None:
+        baseline = {"name": "baseline", "accuracy": 0.91, "unknown_rejection_rate": 0.8}
+        temporal = {"name": "temporal", "accuracy": 0.91, "unknown_rejection_rate": 0.8}
+
+        self.assertEqual(select_router_candidate([baseline, temporal]), baseline)
 
 
 if __name__ == "__main__":

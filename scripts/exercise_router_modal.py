@@ -325,14 +325,29 @@ def train_baseline() -> dict[str, Any]:
     return metrics
 
 
-@app.function(gpu="T4", volumes={str(DATA_ROOT): data_volume, str(MODEL_ROOT): model_volume}, timeout=60 * 60)
-def train_temporal(epochs: int = 8) -> dict[str, Any]:
+@app.function(gpu="A10", volumes={str(DATA_ROOT): data_volume, str(MODEL_ROOT): model_volume}, timeout=60 * 60)
+def train_temporal(epochs: int = 73) -> dict[str, Any]:
     import torch
     from torch import nn
     from torch.utils.data import DataLoader, TensorDataset
+    from sklearn.model_selection import train_test_split
 
     sys.path.insert(0, "/root/src")
     from pozify.ml.exercise_router_features import ROUTER_LABELS
+    from pozify.ml.exercise_router_evaluation import (
+        evaluation_to_dict,
+        evaluate_router_predictions,
+    )
+    from pozify.ml.exercise_router_temporal import (
+        TEMPORAL_ARCHITECTURE,
+        TEMPORAL_BATCH_SIZE,
+        TEMPORAL_DROPOUT_RATE,
+        TEMPORAL_HIDDEN_SIZE,
+        TEMPORAL_LEARNING_RATE,
+        TEMPORAL_NUM_LAYERS,
+        TemporalRouterConfig,
+        build_temporal_router_model,
+    )
 
     _vectors, tensors, labels = _load_feature_arrays()
     if tensors is None or len(set(labels)) < 2:
@@ -342,24 +357,38 @@ def train_temporal(epochs: int = 8) -> dict[str, Any]:
         return result
 
     label_to_index = {label: index for index, label in enumerate(ROUTER_LABELS)}
-    x = torch.tensor(tensors, dtype=torch.float32)
-    y = torch.tensor([label_to_index.get(label, label_to_index["unknown"]) for label in labels])
-    dataset = TensorDataset(x, y)
-    loader = DataLoader(dataset, batch_size=64, shuffle=True)
-
-    class TinyGRU(nn.Module):
-        def __init__(self, input_size: int) -> None:
-            super().__init__()
-            self.gru = nn.GRU(input_size=input_size, hidden_size=64, batch_first=True)
-            self.head = nn.Linear(64, len(ROUTER_LABELS))
-
-        def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-            _outputs, hidden = self.gru(inputs)
-            return self.head(hidden[-1])
+    label_indices = [label_to_index.get(label, label_to_index["unknown"]) for label in labels]
+    label_counts = {label: labels.count(label) for label in sorted(set(labels))}
+    stratify = labels if min(label_counts.values()) >= 2 else None
+    train_x, valid_x, train_y, valid_y, _train_labels, valid_labels = train_test_split(
+        tensors,
+        label_indices,
+        labels,
+        test_size=0.2,
+        random_state=42,
+        stratify=stratify,
+    )
+    train_dataset = TensorDataset(
+        torch.tensor(train_x, dtype=torch.float32),
+        torch.tensor(train_y, dtype=torch.long),
+    )
+    generator = torch.Generator().manual_seed(42)
+    loader = DataLoader(train_dataset, batch_size=TEMPORAL_BATCH_SIZE, shuffle=True, generator=generator)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = TinyGRU(input_size=int(x.shape[-1])).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(42)
+    config = TemporalRouterConfig(
+        input_size=int(tensors.shape[-1]),
+        label_count=len(ROUTER_LABELS),
+        hidden_size=TEMPORAL_HIDDEN_SIZE,
+        num_layers=TEMPORAL_NUM_LAYERS,
+        bidirectional=True,
+        dropout_rate=TEMPORAL_DROPOUT_RATE,
+    )
+    model = build_temporal_router_model(config).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=TEMPORAL_LEARNING_RATE, weight_decay=1e-4)
     loss_fn = nn.CrossEntropyLoss()
     model.train()
     last_loss = 0.0
@@ -373,27 +402,96 @@ def train_temporal(epochs: int = 8) -> dict[str, Any]:
             optimizer.step()
             last_loss = float(loss.detach().cpu())
 
+    valid_predictions = _predict_temporal_labels(
+        model=model,
+        tensors=valid_x,
+        labels=ROUTER_LABELS,
+        device=device,
+    )
+    validation = evaluation_to_dict(evaluate_router_predictions(list(valid_labels), valid_predictions))
+
     torch.save(
         {
             "model_kind": "temporal",
-            "architecture": "tiny_gru",
+            "architecture": TEMPORAL_ARCHITECTURE,
             "state_dict": model.cpu().state_dict(),
             "labels": list(ROUTER_LABELS),
-            "input_size": int(x.shape[-1]),
+            "input_size": int(tensors.shape[-1]),
+            "hidden_size": TEMPORAL_HIDDEN_SIZE,
+            "num_layers": TEMPORAL_NUM_LAYERS,
+            "bidirectional": True,
+            "dropout_rate": TEMPORAL_DROPOUT_RATE,
+            "learning_rate": TEMPORAL_LEARNING_RATE,
+            "batch_size": TEMPORAL_BATCH_SIZE,
         },
         MODEL_ROOT / "temporal.pt",
     )
     metrics = {
         "ok": True,
         "model_kind": "temporal",
-        "architecture": "tiny_gru",
+        "architecture": TEMPORAL_ARCHITECTURE,
         "epochs": epochs,
         "final_training_loss": round(last_loss, 4),
-        "window_count": int(x.shape[0]),
+        "window_count": int(tensors.shape[0]),
+        "label_counts": label_counts,
+        "learning_rate": TEMPORAL_LEARNING_RATE,
+        "batch_size": TEMPORAL_BATCH_SIZE,
+        "hidden_size": TEMPORAL_HIDDEN_SIZE,
+        "dropout_rate": TEMPORAL_DROPOUT_RATE,
+        "validation": validation,
     }
     _write_json(MODEL_ROOT / "temporal_metrics.json", metrics)
     model_volume.commit()
     return metrics
+
+
+def _predict_temporal_labels(
+    *,
+    model: Any,
+    tensors: Any,
+    labels: tuple[str, ...],
+    device: Any,
+) -> list[str]:
+    import torch
+    from torch.utils.data import DataLoader, TensorDataset
+
+    dataset = TensorDataset(torch.tensor(tensors, dtype=torch.float32))
+    loader = DataLoader(dataset, batch_size=128, shuffle=False)
+    predictions: list[str] = []
+    model.eval()
+    with torch.no_grad():
+        for (batch_x,) in loader:
+            logits = model(batch_x.to(device))
+            predicted_indices = torch.argmax(logits, dim=1).detach().cpu().tolist()
+            predictions.extend(labels[index] for index in predicted_indices)
+    return predictions
+
+
+def _evaluate_temporal_checkpoint(checkpoint_path: Path, tensors: Any) -> list[str]:
+    import torch
+
+    sys.path.insert(0, "/root/src")
+    from pozify.ml.exercise_router_temporal import TemporalRouterConfig, build_temporal_router_model
+
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    labels = tuple(str(label) for label in checkpoint["labels"])
+    config = TemporalRouterConfig(
+        input_size=int(checkpoint["input_size"]),
+        label_count=len(labels),
+        hidden_size=int(checkpoint.get("hidden_size", 64)),
+        num_layers=int(checkpoint.get("num_layers", 1)),
+        bidirectional=bool(checkpoint.get("bidirectional", True)),
+        dropout_rate=float(checkpoint.get("dropout_rate", 0.2174)),
+    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = build_temporal_router_model(config).to(device)
+    model.load_state_dict(checkpoint["state_dict"])
+    return _predict_temporal_labels(
+        model=model,
+        tensors=tensors,
+        labels=labels,
+        device=device,
+    )
 
 
 @app.function(volumes={str(DATA_ROOT): data_volume, str(MODEL_ROOT): model_volume})
@@ -401,32 +499,89 @@ def evaluate() -> dict[str, Any]:
     import joblib
 
     sys.path.insert(0, "/root/src")
-    from pozify.ml.exercise_router_evaluation import evaluation_to_dict, evaluate_router_predictions
+    from pozify.ml.exercise_router_evaluation import (
+        evaluation_to_dict,
+        evaluate_router_predictions,
+        select_router_candidate,
+    )
 
-    vectors, _tensors, labels = _load_feature_arrays()
+    vectors, tensors, labels = _load_feature_arrays()
     baseline_path = MODEL_ROOT / "baseline.joblib"
-    if vectors is None or not baseline_path.exists():
-        result = {"ok": False, "error": "Feature arrays and baseline.joblib are required"}
+    temporal_path = MODEL_ROOT / "temporal.pt"
+    if vectors is None or tensors is None:
+        result = {"ok": False, "error": "Feature arrays are required"}
         _write_json(MODEL_ROOT / "evaluation.json", result)
         model_volume.commit()
         return result
 
-    artifact = joblib.load(baseline_path)
-    predictions = list(artifact["model"].predict(vectors))
-    evaluation = evaluation_to_dict(evaluate_router_predictions(labels, predictions))
+    candidates: list[dict[str, Any]] = []
+    model_results: dict[str, Any] = {}
+    if baseline_path.exists():
+        artifact = joblib.load(baseline_path)
+        predictions = list(artifact["model"].predict(vectors))
+        baseline_evaluation = evaluation_to_dict(evaluate_router_predictions(labels, predictions))
+        model_results["baseline"] = {
+            "ok": True,
+            "artifact": "baseline.joblib",
+            **baseline_evaluation,
+        }
+        candidates.append(
+            {
+                "name": "baseline",
+                "source_artifact": baseline_path,
+                "selected_artifact": "router.joblib",
+                **baseline_evaluation,
+            }
+        )
+
+    if temporal_path.exists():
+        predictions = _evaluate_temporal_checkpoint(temporal_path, tensors)
+        temporal_evaluation = evaluation_to_dict(evaluate_router_predictions(labels, predictions))
+        model_results["temporal"] = {
+            "ok": True,
+            "artifact": "temporal.pt",
+            **temporal_evaluation,
+        }
+        candidates.append(
+            {
+                "name": "temporal",
+                "source_artifact": temporal_path,
+                "selected_artifact": "router.pt",
+                **temporal_evaluation,
+            }
+        )
+
+    if not candidates:
+        result = {"ok": False, "error": "At least one trained router artifact is required"}
+        _write_json(MODEL_ROOT / "evaluation.json", result)
+        model_volume.commit()
+        return result
+
+    selected = select_router_candidate(candidates)
+    if selected["selected_artifact"] == "router.joblib":
+        shutil.copyfile(selected["source_artifact"], MODEL_ROOT / "router.joblib")
+    else:
+        shutil.copyfile(selected["source_artifact"], MODEL_ROOT / "router.pt")
+    selection = {
+        "selected_model": f"{selected['name']}.{ 'joblib' if selected['name'] == 'baseline' else 'pt' }",
+        "selected_artifact": selected["selected_artifact"],
+        "reason": "highest accuracy, then unknown rejection rate; baseline wins ties",
+    }
+    _write_json(MODEL_ROOT / "router_selection.json", selection)
     result = {
         "ok": True,
-        "selected_model": "baseline.joblib",
-        **evaluation,
+        "selected_model": selection["selected_model"],
+        "selected_artifact": selection["selected_artifact"],
+        "models": model_results,
+        **{key: selected[key] for key in ("accuracy", "precision", "recall", "unknown_rejection_rate", "confusion_matrix")},
     }
     _write_json(MODEL_ROOT / "evaluation.json", result)
-    shutil.copyfile(baseline_path, MODEL_ROOT / "router.joblib")
     model_volume.commit()
     return result
 
 
 @app.local_entrypoint()
-def main(stage: str = "evaluate", limit: int | None = None, epochs: int = 8) -> None:
+def main(stage: str = "evaluate", limit: int | None = None, epochs: int = 73) -> None:
     if stage == "ingest":
         print(ingest.remote())
     elif stage == "features":
