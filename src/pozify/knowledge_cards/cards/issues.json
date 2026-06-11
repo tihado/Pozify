@@ -1,0 +1,29 @@
+[
+  {
+    "id": "issue:shallow_depth",
+    "type": "issue",
+    "label": "shallow_depth",
+    "summary": "Shallow depth means the movement did not reach the expected bottom position often enough to support full-range reps.",
+    "good_signals": ["clear bottom position", "repeatable depth across reps"],
+    "common_misreads": ["camera angle can affect perceived depth"],
+    "coaching_cues": ["Slow down the descent and pause briefly at the bottom to make depth easier to repeat."]
+  },
+  {
+    "id": "issue:hip_sag",
+    "type": "issue",
+    "label": "hip_sag",
+    "summary": "Hip sag indicates the trunk line dropped below the surrounding body line during the marked interval.",
+    "good_signals": ["more even shoulder-hip-ankle alignment"],
+    "common_misreads": ["short single-frame dips should not be overcalled"],
+    "coaching_cues": ["Reduce speed slightly so you can keep the trunk line steadier through the middle of the rep."]
+  },
+  {
+    "id": "issue:incomplete_lockout",
+    "type": "issue",
+    "label": "incomplete_lockout",
+    "summary": "Incomplete lockout means the top position did not consistently reach the expected overhead or pressing finish.",
+    "good_signals": ["clear top finish", "repeatable end position"],
+    "common_misreads": ["small camera-angle shifts can hide the final top position"],
+    "coaching_cues": ["Finish each rep fully before starting the next one.", "Use a slightly slower top phase to make the lockout more repeatable."]
+  }
+]

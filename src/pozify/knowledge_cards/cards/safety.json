@@ -1,0 +1,26 @@
+[
+  {
+    "id": "safety:no_diagnosis",
+    "type": "safety",
+    "label": "no_diagnosis",
+    "summary": "Do not diagnose injuries, pathology, or medical conditions from this report.",
+    "safety_notes": ["Use coaching language instead of medical conclusions."],
+    "contraindicated_claims": ["diagnose", "diagnosis", "injured", "tear", "medical assessment"]
+  },
+  {
+    "id": "safety:no_injury_prevention_claim",
+    "type": "safety",
+    "label": "no_injury_prevention_claim",
+    "summary": "Do not claim that any cue or correction will prevent injury.",
+    "safety_notes": ["Avoid promises about injury prevention or protection."],
+    "contraindicated_claims": ["injury prevention", "prevent injury", "avoid injury"]
+  },
+  {
+    "id": "safety:confidence_language",
+    "type": "safety",
+    "label": "confidence_language",
+    "summary": "Use uncertainty language when classifier confidence is limited, when issue evidence is sparse, or when some steps are mocked.",
+    "safety_notes": ["Say what the pipeline observed and where confidence is limited."],
+    "contraindicated_claims": ["definitely", "guaranteed", "certainly"]
+  }
+]

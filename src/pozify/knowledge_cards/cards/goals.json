@@ -1,0 +1,37 @@
+[
+  {
+    "id": "goal:strength",
+    "type": "goal",
+    "label": "strength",
+    "summary": "For a strength goal, rep quality should prioritize repeatable setup, stable positions, and clear top and bottom landmarks.",
+    "coaching_cues": ["Keep the setup repeatable from rep to rep.", "Stop the set when rep quality drops enough to change the movement pattern."]
+  },
+  {
+    "id": "goal:hypertrophy",
+    "type": "goal",
+    "label": "hypertrophy",
+    "summary": "For a hypertrophy goal, consistency across reps and controlled range of motion matter more than rushing the set.",
+    "coaching_cues": ["Use a controlled tempo you can repeat.", "Aim for similar depth and finish positions across the whole set."]
+  },
+  {
+    "id": "goal:endurance",
+    "type": "goal",
+    "label": "endurance",
+    "summary": "For an endurance goal, the key pattern to watch is whether technique drifts late in the set as fatigue builds.",
+    "coaching_cues": ["Track where rep quality starts to change.", "Back off pace slightly if later reps become harder to control."]
+  },
+  {
+    "id": "goal:mobility",
+    "type": "goal",
+    "label": "mobility",
+    "summary": "For a mobility goal, range and control should be discussed conservatively and without forcing deeper positions than the evidence supports.",
+    "coaching_cues": ["Favor smooth controlled motion over speed.", "Use consistent camera setup to compare range over time."]
+  },
+  {
+    "id": "goal:beginner_practice",
+    "type": "goal",
+    "label": "beginner_practice",
+    "summary": "For beginner practice, feedback should stay simple, visible, and focused on one or two repeatable adjustments.",
+    "coaching_cues": ["Focus on one clear fix at a time.", "Keep the camera angle consistent so the next set is easier to compare."]
+  }
+]

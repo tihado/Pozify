@@ -1,0 +1,30 @@
+[
+  {
+    "id": "exercise:squat",
+    "type": "exercise",
+    "label": "squat",
+    "aliases": ["bodyweight_squat"],
+    "summary": "A squat rep is interpreted as a controlled top-to-bottom-to-top cycle with depth, balance, and repeatable tempo.",
+    "good_signals": ["consistent depth", "stable torso position", "repeatable rep rhythm"],
+    "common_misreads": ["camera angle can exaggerate depth", "short clips can hide the first or last rep"],
+    "coaching_cues": ["Keep the same stance for each rep.", "Control the descent before you drive back up."]
+  },
+  {
+    "id": "exercise:push_up",
+    "type": "exercise",
+    "label": "push_up",
+    "summary": "A push-up is reviewed as a top-to-bottom-to-top pressing cycle with body-line control and repeatable depth.",
+    "good_signals": ["repeatable elbow bend", "stable trunk line", "clear lockout at the top"],
+    "common_misreads": ["camera tilt can change perceived body line"],
+    "coaching_cues": ["Keep the camera side-on when possible.", "Move with a controlled tempo to make each rep easier to compare."]
+  },
+  {
+    "id": "exercise:shoulder_press",
+    "type": "exercise",
+    "label": "shoulder_press",
+    "summary": "A shoulder press is evaluated as a bottom-to-top-to-bottom overhead pressing cycle with smooth wrist travel and lockout control.",
+    "good_signals": ["repeatable wrist path", "consistent lockout", "balanced left-right rhythm"],
+    "common_misreads": ["front-view camera angle can hide wrist depth"],
+    "coaching_cues": ["Keep the setup consistent across reps.", "Use a controlled finish at the top before lowering again."]
+  }
+]

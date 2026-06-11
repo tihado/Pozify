@@ -1,0 +1,20 @@
+[
+  {
+    "id": "variation:wide_grip_push_up",
+    "type": "variation",
+    "label": "wide_grip_push_up",
+    "summary": "A wide-grip push-up is a valid setup variation and should not be treated as an error by itself.",
+    "good_signals": ["consistent hand placement across the set"],
+    "common_misreads": ["wide hand placement is not automatically a form issue"],
+    "coaching_cues": ["Judge the variation separately from true issue markers."]
+  },
+  {
+    "id": "variation:knee_push_up",
+    "type": "variation",
+    "label": "knee_push_up",
+    "summary": "A knee push-up is a valid push-up variation and should be assessed using its own movement context rather than full push-up expectations.",
+    "good_signals": ["controlled top-to-bottom cycle", "consistent trunk setup"],
+    "common_misreads": ["reduced loading does not automatically mean poor form"],
+    "coaching_cues": ["Keep variation context separate from issue labels."]
+  }
+]
