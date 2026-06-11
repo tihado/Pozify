@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 from pozify.ml.exercise_router_features import ROUTER_LABELS
 
@@ -63,3 +63,16 @@ def evaluation_to_dict(evaluation: RouterEvaluation) -> dict[str, Any]:
         "confusion_matrix": evaluation.confusion_matrix,
     }
 
+
+def select_router_candidate(candidates: Sequence[Mapping[str, Any]]) -> Mapping[str, Any]:
+    if not candidates:
+        raise ValueError("At least one router candidate is required")
+    return max(candidates, key=router_candidate_sort_key)
+
+
+def router_candidate_sort_key(candidate: Mapping[str, Any]) -> tuple[float, float, int]:
+    return (
+        float(candidate.get("accuracy", 0.0)),
+        float(candidate.get("unknown_rejection_rate", 0.0)),
+        1 if candidate.get("name") == "baseline" else 0,
+    )

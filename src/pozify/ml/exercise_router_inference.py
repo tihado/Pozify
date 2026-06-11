@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from pozify.ml.exercise_router_features import ROUTER_LABELS, RouterWindow
+from pozify.ml.exercise_router_temporal import TorchTemporalRouter
 
 
 DEFAULT_MODEL_DIR = Path("models/exercise_router/active")
+ACTIVE_SELECTION_FILENAME = "router_selection.json"
 MODEL_FILENAMES = (
     "router.joblib",
+    "router.pt",
     "model.joblib",
     "baseline.joblib",
+    "temporal.pt",
     "exercise_router.joblib",
 )
 MIN_FINAL_CONFIDENCE = 0.65
@@ -49,6 +54,10 @@ class AggregatedRouterPrediction:
 
 
 def load_router_model(model_dir: Path = DEFAULT_MODEL_DIR) -> RouterModelBundle | None:
+    selected_path = _selected_artifact_path(model_dir)
+    if selected_path is not None and selected_path.exists():
+        return load_router_model_file(selected_path)
+
     for filename in MODEL_FILENAMES:
         path = model_dir / filename
         if not path.exists():
@@ -58,6 +67,9 @@ def load_router_model(model_dir: Path = DEFAULT_MODEL_DIR) -> RouterModelBundle 
 
 
 def load_router_model_file(path: Path) -> RouterModelBundle:
+    if path.suffix == ".pt":
+        return _load_temporal_router_model_file(path)
+
     try:
         import joblib
     except ImportError as exc:  # pragma: no cover - dependency is declared
@@ -85,6 +97,23 @@ def load_router_model_file(path: Path) -> RouterModelBundle:
         labels=_labels_from_artifact(None, artifact),
         scaler=None,
         model_kind="baseline",
+    )
+
+
+def _load_temporal_router_model_file(path: Path) -> RouterModelBundle:
+    try:
+        import torch
+    except ImportError as exc:  # pragma: no cover - optional runtime dependency
+        raise RuntimeError("torch is required to load temporal exercise router artifacts") from exc
+
+    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    labels = _labels_from_artifact(checkpoint.get("labels"), checkpoint)
+    model = TorchTemporalRouter(checkpoint=checkpoint, labels=labels)
+    return RouterModelBundle(
+        model=model,
+        labels=labels,
+        scaler=None,
+        model_kind=str(checkpoint.get("model_kind", "temporal")),
     )
 
 
@@ -200,6 +229,17 @@ def _labels_from_artifact(labels: Any, model: Any) -> tuple[str, ...]:
         return ROUTER_LABELS
     normalized = tuple(str(label) for label in labels)
     return normalized or ROUTER_LABELS
+
+
+def _selected_artifact_path(model_dir: Path) -> Path | None:
+    selection_path = model_dir / ACTIVE_SELECTION_FILENAME
+    if not selection_path.exists():
+        return None
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    selected_artifact = selection.get("selected_artifact")
+    if not isinstance(selected_artifact, str) or not selected_artifact:
+        return None
+    return model_dir / selected_artifact
 
 
 def _score_map(row: np.ndarray, labels: tuple[str, ...]) -> dict[str, float]:
