@@ -381,6 +381,13 @@ function severityText(issue) {
   return `minor attention ${severity}%`;
 }
 
+function severityLevel(issue) {
+  const severity = Math.round(issue.severity * 100);
+  if (severity >= 70) return "high";
+  if (severity >= 40) return "moderate";
+  return "minor";
+}
+
 function thumbnailForIssue(result, issue, index) {
   const thumbnails = result?.issue_thumbnail_urls || [];
   return (
@@ -480,7 +487,11 @@ function IssuesTab({ result }) {
               h(
                 "div",
                 { className: "timeline-meta" },
-                h("span", null, severityText(issue)),
+                h(
+                  "span",
+                  { className: `severity-chip ${severityLevel(issue)}` },
+                  severityText(issue),
+                ),
                 h(
                   "span",
                   null,

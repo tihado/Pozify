@@ -671,6 +671,24 @@ td {
   background: rgba(33, 79, 58, 0.08);
 }
 
+.timeline-meta .severity-chip.minor {
+  border: 1px solid rgba(49, 75, 99, 0.18);
+  color: #27465a;
+  background: rgba(49, 75, 99, 0.12);
+}
+
+.timeline-meta .severity-chip.moderate {
+  border: 1px solid rgba(190, 104, 75, 0.28);
+  color: #70402e;
+  background: rgba(190, 104, 75, 0.18);
+}
+
+.timeline-meta .severity-chip.high {
+  border: 1px solid rgba(132, 45, 37, 0.32);
+  color: #6d261f;
+  background: rgba(132, 45, 37, 0.2);
+}
+
 .quality-list span {
   border-radius: 999px;
   padding: 7px 10px;
