@@ -557,6 +557,37 @@ def _validate_final_report(value: Any, path: str) -> None:
     _require_type(artifacts["run_dir"], str, f"{path}.artifacts.run_dir")
     if artifacts["annotated_video_path"] is not None:
         _require_type(artifacts["annotated_video_path"], str, f"{path}.artifacts.annotated_video_path")
+    if "issue_thumbnail_paths" in artifacts:
+        _require_type(artifacts["issue_thumbnail_paths"], list, f"{path}.artifacts.issue_thumbnail_paths")
+        for index, thumbnail_value in enumerate(artifacts["issue_thumbnail_paths"]):
+            thumbnail_path = f"{path}.artifacts.issue_thumbnail_paths[{index}]"
+            thumbnail = _require_mapping(thumbnail_value, thumbnail_path)
+            _require_fields(thumbnail, {"issue", "rep_id", "frame", "path"}, thumbnail_path)
+            _require_type(thumbnail["issue"], str, f"{thumbnail_path}.issue")
+            _require_int(thumbnail["rep_id"], f"{thumbnail_path}.rep_id", minimum=1)
+            _require_int(thumbnail["frame"], f"{thumbnail_path}.frame", minimum=0)
+            _require_type(thumbnail["path"], str, f"{thumbnail_path}.path")
+    if "issue_clip_paths" in artifacts:
+        _require_type(artifacts["issue_clip_paths"], list, f"{path}.artifacts.issue_clip_paths")
+        for index, clip_value in enumerate(artifacts["issue_clip_paths"]):
+            clip_path = f"{path}.artifacts.issue_clip_paths[{index}]"
+            clip = _require_mapping(clip_value, clip_path)
+            _require_fields(
+                clip,
+                {"issue", "rep_id", "start_sec", "end_sec", "clip_start_sec", "clip_end_sec", "path"},
+                clip_path,
+            )
+            _require_type(clip["issue"], str, f"{clip_path}.issue")
+            _require_int(clip["rep_id"], f"{clip_path}.rep_id", minimum=1)
+            _require_number(clip["start_sec"], f"{clip_path}.start_sec", minimum=0)
+            _require_number(clip["end_sec"], f"{clip_path}.end_sec", minimum=0)
+            _require_number(clip["clip_start_sec"], f"{clip_path}.clip_start_sec", minimum=0)
+            _require_number(clip["clip_end_sec"], f"{clip_path}.clip_end_sec", minimum=0)
+            if clip["start_sec"] > clip["end_sec"]:
+                raise ContractValidationError(f"{clip_path} timestamps must be ordered")
+            if clip["clip_start_sec"] > clip["clip_end_sec"]:
+                raise ContractValidationError(f"{clip_path} clip timestamps must be ordered")
+            _require_type(clip["path"], str, f"{clip_path}.path")
 
 
 def _validate_run_manifest(value: Any, path: str) -> None:

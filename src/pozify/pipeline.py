@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 from pozify.artifacts import write_json
@@ -21,6 +21,7 @@ from pozify.steps import (
 
 
 RUNS_DIR = Path("runs")
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 def _env_mock_mode(video_path: str | None) -> bool:
@@ -37,6 +38,7 @@ def run_pipeline(
     profile_input: dict[str, Any],
     *,
     mock: bool | None = None,
+    progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     mock_mode = _env_mock_mode(video_path) if mock is None else mock
 
@@ -54,6 +56,19 @@ def run_pipeline(
             }
         )
 
+    def emit(step: str, status: str, text: str, **payload: Any) -> None:
+        if progress is None:
+            return
+        progress(
+            {
+                "type": "progress",
+                "step": step,
+                "status": status,
+                "text": text,
+                "payload": payload,
+            }
+        )
+
     profile = UserProfile(
         goal=profile_input["goal"],
         experience_level=profile_input["experience_level"],
@@ -64,15 +79,57 @@ def run_pipeline(
     )
     write_artifact("user_profile.json", profile)
 
+    emit(
+        "quality",
+        "active",
+        "First up, I am checking if the video is clear enough to coach from.",
+    )
     manifest = video_qc.run(video_path)
     write_artifact("video_manifest.json", manifest)
+    emit(
+        "quality",
+        "done",
+        (
+            "Quick note: the video has a few things to watch."
+            if manifest.quality_warnings
+            else "Nice, your video quality looks solid."
+        ),
+        warnings=manifest.quality_warnings,
+        analysis_allowed=manifest.analysis_allowed,
+    )
 
+    emit(
+        "pose",
+        "active",
+        "Now I am mapping your posture and tracking the key body landmarks.",
+    )
     pose_sequence = pose_landmarker.run(manifest, mock=mock_mode)
     cleaned_pose_sequence = pose_cleaning.run(pose_sequence)
     write_artifact("pose_sequence.json", cleaned_pose_sequence)
+    pose_source = (
+        cleaned_pose_sequence.frames[0].pose_quality.get("source")
+        if cleaned_pose_sequence.frames
+        else "none"
+    )
+    emit(
+        "pose",
+        "done",
+        "Posture tracking is done. I found the key landmarks I need.",
+        frame_count=len(cleaned_pose_sequence.frames),
+        pose_source=pose_source,
+        pose_valid_ratio=cleaned_pose_sequence.pose_valid_ratio,
+    )
 
-    classification = exercise_classifier.run(cleaned_pose_sequence, profile, mock=mock_mode)
+    emit("exercise", "active", "Let me figure out which exercise you are doing.")
+    classification = exercise_classifier.run(cleaned_pose_sequence, profile)
     write_artifact("exercise_classification.json", classification)
+    emit(
+        "exercise",
+        "done",
+        f"Looks like you are doing {classification.exercise.replace('_', ' ')}.",
+        exercise=classification.exercise,
+        confidence=classification.confidence,
+    )
 
     exercise = create_exercise_strategy(
         classification.exercise,
@@ -81,10 +138,26 @@ def run_pipeline(
         profile=profile,
     )
 
+    emit("reps", "active", "Counting your reps now. One clean rep at a time.")
     reps, rep_debug = exercise.count()
     write_artifact("reps.json", reps)
     write_artifact("rep_debug.json", rep_debug)
+    emit(
+        "reps",
+        "done",
+        (
+            f"I counted {len(reps.reps)} {classification.exercise.replace('_', ' ')} "
+            "reps in this set."
+        ),
+        rep_count=len(reps.reps),
+        exercise=classification.exercise,
+    )
 
+    emit(
+        "issues",
+        "active",
+        "Almost there. I am checking the moments that may need a small fix.",
+    )
     analysis = exercise.analyze_reps(reps)
     write_artifact("rep_analysis.json", analysis)
 
@@ -93,13 +166,42 @@ def run_pipeline(
 
     issues = exercise.mark_issues(reps, analysis, variation)
     write_artifact("issue_markers.json", issues)
+    emit(
+        "issues",
+        "done",
+        (
+            f"I found {len(issues.issues)} coaching point"
+            f"{'' if len(issues.issues) == 1 else 's'} worth reviewing."
+            if issues.issues
+            else "Good news, I did not spot any clear form issues in this set."
+        ),
+        issue_count=len(issues.issues),
+    )
 
-    annotated_video_path = annotated_renderer.run(manifest, cleaned_pose_sequence, reps, issues, run_dir)
+    emit("render", "active", "I am preparing your annotated video and issue clips.")
+    render_artifacts = annotated_renderer.run(
+        manifest,
+        cleaned_pose_sequence,
+        reps,
+        issues,
+        run_dir,
+    )
+    emit(
+        "render",
+        "done",
+        (
+            "Your annotated video is ready."
+            if render_artifacts.annotated_video_path
+            else "I could not render an annotated video, but the report is ready."
+        ),
+        annotated_video_path=render_artifacts.annotated_video_path,
+        issue_clip_count=len(render_artifacts.issue_clip_paths),
+    )
 
-    pose_source = (
-        cleaned_pose_sequence.frames[0].pose_quality.get("source")
-        if cleaned_pose_sequence.frames
-        else "none"
+    emit(
+        "coach",
+        "active",
+        "I am turning the scan into coaching notes you can use right away.",
     )
     analysis_mode = "mock" if mock_mode else "real"
     mock_steps = [
@@ -114,6 +216,12 @@ def run_pipeline(
 
     verification = verifier.run(summary, issues, variation)
     write_artifact("verification.json", verification)
+    emit(
+        "coach",
+        "done",
+        "Coach notes are ready.",
+        verification_passed=verification.passed,
+    )
 
     final_report = {
         "run_id": run_id,
@@ -128,7 +236,9 @@ def run_pipeline(
         "verification": to_dict(verification),
         "artifacts": {
             "run_dir": str(run_dir),
-            "annotated_video_path": annotated_video_path,
+            "annotated_video_path": render_artifacts.annotated_video_path,
+            "issue_thumbnail_paths": render_artifacts.issue_thumbnail_paths,
+            "issue_clip_paths": render_artifacts.issue_clip_paths,
             "rep_debug_path": str(run_dir / "rep_debug.json"),
             "analysis_mode": analysis_mode,
             "pose_source": pose_source,
@@ -147,7 +257,9 @@ def run_pipeline(
     return {
         "run_id": run_id,
         "run_dir": str(run_dir),
-        "annotated_video_path": annotated_video_path,
+        "annotated_video_path": render_artifacts.annotated_video_path,
+        "issue_thumbnail_paths": render_artifacts.issue_thumbnail_paths,
+        "issue_clip_paths": render_artifacts.issue_clip_paths,
         "manifest_path": str(run_dir / "manifest.json"),
         "final_report": final_report,
     }
