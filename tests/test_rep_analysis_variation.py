@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import math
 import sys
+from typing import Callable
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -51,6 +52,54 @@ def _push_up_landmarks(depth: float, *, hand_ratio: float = 1.7) -> dict[str, di
         "right_hip": {"x": 0.58, "y": hip_y},
         "left_ankle": {"x": 0.44, "y": ankle_y},
         "right_ankle": {"x": 0.56, "y": ankle_y},
+    }
+
+
+def _knee_push_up_landmarks(depth: float, *, hand_ratio: float = 1.1) -> dict[str, dict[str, float]]:
+    shoulder_y = 0.38 + depth * 0.16
+    hip_y = 0.46 + depth * 0.16
+    knee_y = hip_y + 0.03
+    ankle_y = hip_y + 0.28
+    elbow_y = 0.46 + depth * 0.1
+    wrist_y = 0.5 + depth * 0.04
+    shoulder_width = 0.4
+    hand_width = shoulder_width * hand_ratio
+    return {
+        "left_shoulder": {"x": 0.3, "y": shoulder_y},
+        "right_shoulder": {"x": 0.7, "y": shoulder_y},
+        "left_elbow": {"x": 0.36 + depth * 0.02, "y": elbow_y},
+        "right_elbow": {"x": 0.64 - depth * 0.02, "y": elbow_y},
+        "left_wrist": {"x": 0.5 - hand_width / 2, "y": wrist_y},
+        "right_wrist": {"x": 0.5 + hand_width / 2, "y": wrist_y},
+        "left_hip": {"x": 0.42, "y": hip_y},
+        "right_hip": {"x": 0.58, "y": hip_y},
+        "left_knee": {"x": 0.44, "y": knee_y},
+        "right_knee": {"x": 0.56, "y": knee_y},
+        "left_ankle": {"x": 0.44, "y": ankle_y},
+        "right_ankle": {"x": 0.56, "y": ankle_y},
+    }
+
+
+def _straight_leg_push_up_landmarks(depth: float) -> dict[str, dict[str, float]]:
+    shoulder_y = 0.38 + depth * 0.1
+    hip_y = 0.46 + depth * 0.1
+    knee_y = 0.5 + depth * 0.1
+    ankle_y = 0.52 + depth * 0.1
+    elbow_y = 0.46 + depth * 0.06
+    wrist_y = 0.52 + depth * 0.02
+    return {
+        "left_shoulder": {"x": 0.3, "y": shoulder_y},
+        "right_shoulder": {"x": 0.32, "y": shoulder_y},
+        "left_elbow": {"x": 0.35, "y": elbow_y},
+        "right_elbow": {"x": 0.37, "y": elbow_y},
+        "left_wrist": {"x": 0.42, "y": wrist_y},
+        "right_wrist": {"x": 0.44, "y": wrist_y},
+        "left_hip": {"x": 0.58, "y": hip_y},
+        "right_hip": {"x": 0.6, "y": hip_y},
+        "left_knee": {"x": 0.72, "y": knee_y},
+        "right_knee": {"x": 0.74, "y": knee_y},
+        "left_ankle": {"x": 0.88, "y": ankle_y},
+        "right_ankle": {"x": 0.9, "y": ankle_y},
     }
 
 
@@ -107,6 +156,20 @@ def _sequence(exercise: str) -> PoseSequence:
     )
 
 
+def _custom_sequence(
+    landmark_factory: Callable[[float], dict[str, dict[str, float]]],
+) -> PoseSequence:
+    frames = []
+    for frame_index in range(25):
+        frames.append(_frame(frame_index, landmark_factory(_wave(frame_index, 24))))
+    return PoseSequence(
+        frames=frames,
+        normalized=True,
+        smoothing_method="none",
+        pose_valid_ratio=1.0,
+    )
+
+
 def _classification(exercise: str) -> ExerciseClassification:
     return ExerciseClassification(
         exercise=exercise,
@@ -148,6 +211,30 @@ class RepAnalysisVariationTests(unittest.TestCase):
         self.assertIn("wide_hand_placement", variation.not_issues)
         self.assertGreater(analysis.items[0].metrics["hand_width_ratio"], 1.45)
         self.assertIn("body_line_score", analysis.items[0].metrics)
+
+    def test_push_up_metrics_detect_knee_push_up_variation(self) -> None:
+        analysis = rep_analysis.run(
+            _classification("push_up"),
+            _reps("push_up"),
+            _custom_sequence(_knee_push_up_landmarks),
+        )
+        variation = variation_detector.run(_classification("push_up"), analysis, _profile())
+
+        self.assertEqual(variation.detected_variation, "knee_push_up")
+        self.assertIn("knee_contact", variation.not_issues)
+        self.assertGreaterEqual(analysis.aggregate_metrics["avg_knee_support_score"], 0.8)
+
+    def test_straight_leg_push_up_does_not_false_positive_as_knee_push_up(self) -> None:
+        analysis = rep_analysis.run(
+            _classification("push_up"),
+            _reps("push_up"),
+            _custom_sequence(_straight_leg_push_up_landmarks),
+        )
+        variation = variation_detector.run(_classification("push_up"), analysis, _profile())
+
+        self.assertNotEqual(variation.detected_variation, "knee_push_up")
+        self.assertNotIn("knee_contact", variation.not_issues)
+        self.assertLess(analysis.aggregate_metrics["avg_knee_support_score"], 0.8)
 
     def test_squat_metrics_detect_wide_stance_variation(self) -> None:
         analysis = rep_analysis.run(_classification("squat"), _reps("squat"), _sequence("squat"))
