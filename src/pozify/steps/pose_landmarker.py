@@ -46,11 +46,16 @@ def _iter_video_frames(
         if not capture.isOpened():
             return
         if sample_count is None:
-            frame_indices = range(manifest.total_frames)
-        else:
-            frame_indices = sample_frame_indices(
-                manifest.total_frames, min(sample_count, manifest.total_frames)
-            )
+            for frame_index in range(manifest.total_frames):
+                ok, frame = capture.read()
+                if not ok or frame is None:
+                    break
+                yield frame_index, frame
+            return
+
+        frame_indices = sample_frame_indices(
+            manifest.total_frames, min(sample_count, manifest.total_frames)
+        )
         for frame_index in frame_indices:
             capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
             ok, frame = capture.read()

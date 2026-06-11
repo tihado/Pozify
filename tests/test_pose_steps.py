@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -128,6 +129,50 @@ class PoseStepTests(unittest.TestCase):
         sequence = pose_landmarker.run(manifest, backend=_FakePose())
 
         self.assertEqual(len(sequence.frames), 130)
+
+    def test_dense_video_iteration_reads_sequentially_without_reseeking(self) -> None:
+        class FakeCapture:
+            def __init__(self) -> None:
+                self.set_calls: list[tuple[int, int]] = []
+                self.read_calls = 0
+
+            def isOpened(self) -> bool:
+                return True
+
+            def set(self, prop: int, value: int) -> None:
+                self.set_calls.append((prop, value))
+
+            def read(self) -> tuple[bool, object | None]:
+                if self.read_calls >= 3:
+                    return False, None
+                self.read_calls += 1
+                return True, object()
+
+            def release(self) -> None:
+                return None
+
+        capture = FakeCapture()
+        manifest = VideoManifest(
+            video_path="fake.mp4",
+            fps=30.0,
+            duration_sec=0.1,
+            total_frames=3,
+            sampled_frames=3,
+            width=640,
+            height=480,
+            codec="mp4v",
+            container="mp4",
+            brightness_mean=120.0,
+            blur_laplacian_var=100.0,
+            quality_warnings=[],
+            analysis_allowed=True,
+        )
+
+        with patch("pozify.steps.pose_landmarker.cv2.VideoCapture", return_value=capture):
+            frames = list(pose_landmarker._iter_video_frames(manifest, sample_count=None))
+
+        self.assertEqual([frame_index for frame_index, _ in frames], [0, 1, 2])
+        self.assertEqual(capture.set_calls, [])
 
     def test_pose_cleaning_interpolates_smooths_and_adds_normalized_fields(
         self,
