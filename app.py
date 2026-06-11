@@ -188,6 +188,10 @@ def _profile_input(
     }
 
 
+def _parse_bool_form(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _analysis_gpu_duration(*_args: Any, **_kwargs: Any) -> int:
     return default_spaces_gpu_duration()
 
@@ -196,11 +200,13 @@ def _analysis_gpu_duration(*_args: Any, **_kwargs: Any) -> int:
 def _run_analysis_pipeline(
     video_path: str | None,
     profile_input: dict[str, Any],
+    bypass_verifier: bool = False,
     progress: Any | None = None,
 ) -> dict[str, Any]:
     return run_pipeline(
         video_path=video_path,
         profile_input=profile_input,
+        bypass_verifier=bypass_verifier,
         progress=progress,
     )
 
@@ -261,6 +267,7 @@ async def analyze_api(
     intended_variation: str = Form(default=""),
     limitations: str = Form(default="[]"),
     equipment: str = Form(default="bodyweight"),
+    bypass_verifier: str = Form(default="false"),
 ) -> dict[str, Any]:
     profile = _profile_input(
         goal=goal,
@@ -272,7 +279,11 @@ async def analyze_api(
     )
     video_path = await _save_upload(video)
     try:
-        result = _run_analysis_pipeline(video_path, profile)
+        result = _run_analysis_pipeline(
+            video_path,
+            profile,
+            _parse_bool_form(bypass_verifier),
+        )
     finally:
         if video_path is not None:
             Path(video_path).unlink(missing_ok=True)
@@ -289,6 +300,7 @@ async def analyze_stream_api(
     intended_variation: str = Form(default=""),
     limitations: str = Form(default="[]"),
     equipment: str = Form(default="bodyweight"),
+    bypass_verifier: str = Form(default="false"),
 ) -> StreamingResponse:
     profile = _profile_input(
         goal=goal,
@@ -303,7 +315,12 @@ async def analyze_stream_api(
 
     def worker() -> None:
         try:
-            result = _run_analysis_pipeline(video_path, profile, events.put)
+            result = _run_analysis_pipeline(
+                video_path,
+                profile,
+                _parse_bool_form(bypass_verifier),
+                events.put,
+            )
             events.put({"type": "complete", "result": _analysis_response(result)})
         except Exception as exc:  # pragma: no cover - surfaced to browser clients
             events.put({"type": "error", "detail": str(exc)})
