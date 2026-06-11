@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from pozify.steps.pose_backends.base import PoseBackend, PoseDetection
+from pozify.steps.pose_backends.base import (
+    PoseBackend,
+    PoseBackendUnavailableError,
+    PoseDetection,
+)
 from pozify.steps.pose_backends.landmarks import (
     LANDMARK_NAMES,
     LANDMARK_SCHEMA,
@@ -20,6 +24,7 @@ __all__ = [
     "MediaPipePoseBackend",
     "MockPoseBackend",
     "PoseBackend",
+    "PoseBackendUnavailableError",
     "PoseDetection",
     "create_pose_backend",
     "landmark_list_to_dict",

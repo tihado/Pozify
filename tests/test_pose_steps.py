@@ -19,7 +19,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify.contracts import PoseFrame, PoseSequence, VideoManifest
 from pozify.steps import pose_cleaning, pose_landmarker
-from pozify.steps.pose_backends import PoseDetection, landmark_list_to_dict
+from pozify.steps.pose_backends import (
+    PoseBackendUnavailableError,
+    PoseDetection,
+    landmark_list_to_dict,
+)
 from pozify.steps.pose_backends.mediapipe import _MediaPipeTasksPoseAdapter
 
 
@@ -132,6 +136,40 @@ class PoseStepTests(unittest.TestCase):
         sequence = pose_landmarker.run(manifest, backend=_FakePose())
 
         self.assertEqual(len(sequence.frames), 130)
+
+    def test_pose_landmarker_returns_unavailable_sequence_for_missing_backend_libs(
+        self,
+    ) -> None:
+        path = self._write_video()
+        manifest = VideoManifest(
+            video_path=str(path),
+            fps=30.0,
+            duration_sec=0.133,
+            total_frames=4,
+            sampled_frames=4,
+            width=640,
+            height=480,
+            codec="mp4v",
+            container="mp4",
+            brightness_mean=120.0,
+            blur_laplacian_var=100.0,
+            quality_warnings=[],
+            analysis_allowed=True,
+        )
+
+        with patch(
+            "pozify.steps.pose_landmarker.create_pose_backend",
+            side_effect=PoseBackendUnavailableError("missing libGLESv2.so.2"),
+        ):
+            sequence = pose_landmarker.run(manifest, backend_name="mediapipe")
+
+        self.assertEqual(sequence.pose_valid_ratio, 0.0)
+        self.assertEqual(len(sequence.frames), 1)
+        self.assertEqual(
+            sequence.frames[0].pose_quality["pose_warning"],
+            "pose_backend_unavailable",
+        )
+        self.assertIn("libGLESv2", sequence.frames[0].pose_quality["reason"])
 
     def test_dense_video_iteration_reads_sequentially_without_reseeking(self) -> None:
         class FakeCapture:

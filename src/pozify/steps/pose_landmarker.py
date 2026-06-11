@@ -12,6 +12,7 @@ from pozify.steps.pose_backends import (
     LANDMARK_SCHEMA,
     MockPoseBackend,
     PoseBackend,
+    PoseBackendUnavailableError,
     create_pose_backend,
 )
 from pozify.steps.video_qc import sample_frame_indices
@@ -120,6 +121,33 @@ def _empty_sequence() -> PoseSequence:
     )
 
 
+def _unavailable_sequence(reason: str) -> PoseSequence:
+    return PoseSequence(
+        frames=[
+            PoseFrame(
+                frame_index=0,
+                timestamp_sec=0.0,
+                landmarks={},
+                world_landmarks={},
+                pose_quality={
+                    "mean_visibility": 0.0,
+                    "critical_landmarks_visible": False,
+                    "full_body_visibility_proxy": 0.0,
+                    "landmark_count": 0,
+                    "pose_warning": "pose_backend_unavailable",
+                    "source": "none",
+                    "landmark_schema": LANDMARK_SCHEMA,
+                    "coordinate_source": "none",
+                    "reason": reason,
+                },
+            )
+        ],
+        normalized=False,
+        smoothing_method="none",
+        pose_valid_ratio=0.0,
+    )
+
+
 def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequence:
     if not manifest.analysis_allowed or not manifest.video_path:
         return _empty_sequence()
@@ -167,7 +195,10 @@ def _gpu_duration(*_args: Any, **_kwargs: Any) -> int:
 
 @spaces_gpu(duration=_gpu_duration)
 def _run_named_backend(manifest: VideoManifest, backend_name: str) -> PoseSequence:
-    selected_backend = create_pose_backend(backend_name)
+    try:
+        selected_backend = create_pose_backend(backend_name)
+    except PoseBackendUnavailableError as exc:
+        return _unavailable_sequence(str(exc))
     return _run_with_backend(manifest, selected_backend)
 
 

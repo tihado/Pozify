@@ -11,6 +11,10 @@ class PoseDetection:
     source: str
 
 
+class PoseBackendUnavailableError(RuntimeError):
+    pass
+
+
 class PoseBackend(Protocol):
     source: str
 
