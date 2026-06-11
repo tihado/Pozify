@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from pozify.contracts import PoseFrame, PoseSequence, UserProfile, VideoManifest
+from pozify.contracts import PoseFrame, PoseSequence, UserProfile, VideoManifest, validate_contract
 from pozify.exercises import create_exercise_strategy
 from pozify.exercises.push_up import PushUpExercise
 from pozify.exercises.shoulder_press import ShoulderPressExercise
@@ -176,6 +176,8 @@ class RepCounterTests(unittest.TestCase):
         self.assertEqual(reps.reps, [])
         self.assertEqual(reps.partial_reps, [{"reason": "unknown_exercise"}])
         self.assertEqual(debug["selected_signal"], "none")
+        validate_contract("reps.json", reps)
+        validate_contract("rep_debug.json", debug)
 
     def test_exercises_resolve_to_specific_strategies(self) -> None:
         sequence = _sequence_for_exercise("push_up", 1)

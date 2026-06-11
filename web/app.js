@@ -17,6 +17,16 @@ function label(value) {
   return value.replaceAll("_", " ");
 }
 
+async function readResponseBody(response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) return JSON.parse(text);
+
+  return { detail: text };
+}
+
 function Field({ labelText, children, full = false }) {
   return h(
     "label",
@@ -199,7 +209,7 @@ function App() {
 
     try {
       const response = await fetch("/api/analyze", { method: "POST", body: payload });
-      const body = await response.json();
+      const body = await readResponseBody(response);
       if (!response.ok) throw new Error(body.detail || "Analysis failed.");
       setResult(body);
       setStatus("complete");

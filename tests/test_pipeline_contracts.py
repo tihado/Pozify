@@ -229,6 +229,20 @@ class PipelineContractTests(unittest.TestCase):
                 report = result["final_report"]
                 self.assertEqual(report["exercise"]["exercise"], exercise)
 
+    def test_pipeline_runs_with_manual_unknown_exercise(self) -> None:
+        result = pipeline.run_pipeline(
+            video_path=None,
+            profile_input={**PROFILE_INPUT, "intended_exercise": "unknown"},
+            mock=True,
+        )
+
+        self._assert_pipeline_artifacts(result)
+        report = result["final_report"]
+        self.assertEqual(report["exercise"]["exercise"], "unknown")
+        self.assertFalse(report["exercise"]["fallback_required"])
+        self.assertEqual(report["reps"]["reps"], [])
+        self.assertEqual(report["reps"]["partial_reps"], [{"reason": "unknown_exercise"}])
+
     def test_mock_mode_defaults_to_real_when_video_path_is_present(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             self.assertFalse(pipeline._env_mock_mode("sample.mp4"))
