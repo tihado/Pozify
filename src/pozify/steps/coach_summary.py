@@ -9,6 +9,8 @@ from pozify.contracts import (
     UserProfile,
     Variation,
 )
+from pozify.steps.summary_context import build_summary_context
+from pozify.steps.summary_provider import create_summary_provider
 
 
 def run(
@@ -18,46 +20,80 @@ def run(
     analysis: RepAnalysis,
     variation: Variation,
     issues: IssueMarkers,
+    *,
+    mock_steps: list[str] | None = None,
 ) -> CoachSummary:
-    issue_labels = [issue.issue for issue in issues.issues]
-    main_issue = issue_labels[0] if issue_labels else "no_major_issue"
-    issue_text = (
-        f"The strongest frame-level marker is `{main_issue}`, with timestamps and metric evidence in the issue timeline."
-        if issues.issues
-        else "The frame-level issue rules did not find a sustained threshold violation."
+    context = build_summary_context(
+        profile,
+        classification,
+        reps,
+        analysis,
+        variation,
+        issues,
+        mock_steps=mock_steps,
+    )
+    payload = create_summary_provider().generate(context)
+    return CoachSummary(
+        summary=payload["summary"],
+        what_went_well=list(payload["what_went_well"]),
+        main_findings=list(payload["main_findings"]),
+        variation_explanation=payload["variation_explanation"],
+        top_fixes=list(payload["top_fixes"]),
+        next_session_plan=list(payload["next_session_plan"]),
+        confidence_notes=list(payload["confidence_notes"]),
     )
 
+
+def build_fallback(
+    profile: UserProfile,
+    classification: ExerciseClassification,
+    reps: Reps,
+    analysis: RepAnalysis,
+    variation: Variation,
+    issues: IssueMarkers,
+    *,
+    verification_notes: list[str],
+    mock_steps: list[str] | None = None,
+) -> CoachSummary:
+    issue_labels = sorted({issue.issue for issue in issues.issues})
+    issue_text = (
+        "Observed issue labels: " + ", ".join(f"`{label}`" for label in issue_labels) + "."
+        if issue_labels
+        else "No issue labels were emitted from the current issue marker step."
+    )
     return CoachSummary(
         summary=(
-            f"The pipeline segmented {len(reps.reps)} {classification.exercise} reps from the current pose stream. "
-            f"Exercise routing, variation labeling, and coaching language may still use lightweight rules or placeholders. "
-            f"The detected variation is `{variation.detected_variation}`. {issue_text}"
+            f"The pipeline observed {len(reps.reps)} {classification.exercise} rep(s) and the variation label "
+            f"`{variation.detected_variation}`. {issue_text}"
         ),
         what_went_well=[
-            f"Current placeholder ROM score is {analysis.aggregate_metrics['avg_rom_score']}.",
-            f"Current placeholder symmetry score is {analysis.aggregate_metrics['avg_symmetry_score']}.",
+            f"Average ROM score from the structured artifacts is {analysis.aggregate_metrics['avg_rom_score']}.",
+            f"Average symmetry score from the structured artifacts is {analysis.aggregate_metrics['avg_symmetry_score']}.",
         ],
         main_findings=[
-            f"Frame-level marker `{main_issue}` appears in {len(issues.issues)} interval(s)."
-            if issues.issues
-            else "No sustained issue interval detected."
+            issue_text,
+            "A conservative fallback summary was used because the generated draft failed verification.",
         ],
         variation_explanation=(
-            f"`{variation.detected_variation}` was included as context for interpreting issue markers. "
-            f"It should be reviewed alongside camera angle and pose confidence."
+            f"`{variation.detected_variation}` is treated as context and not automatically as an error."
         ),
         top_fixes=[
-            "Keep the same setup and record from a stable camera angle.",
-            "Stop the set when the first repeated issue marker appears.",
-            "Use slower reps until the highlighted metric improves.",
+            "Keep the camera angle and setup consistent for the next review.",
+            "Focus on one visible adjustment at a time.",
+            "Use the issue timeline and aggregate metrics as the main comparison points.",
         ],
         next_session_plan=[
-            "Warm up with 1 easy set of 5 controlled reps.",
-            "Perform 2 working sets and keep the camera angle consistent.",
-            "Compare the next run against this report's issue timeline.",
+            "Repeat the same recording setup on the next set.",
+            "Compare whether the same issue labels appear in the same part of the set.",
+            "Use a slower tempo if you want cleaner evidence for the next comparison.",
         ],
         confidence_notes=[
-            f"Current mock classifier confidence placeholder: {classification.confidence:.0%}.",
-            "Rep segmentation can run on real pose, but downstream interpretation is still partially mocked.",
+            *verification_notes,
+            f"Classifier confidence for this run is {classification.confidence:.0%}.",
+            (
+                "Some steps still use placeholders: " + ", ".join(mock_steps)
+                if mock_steps
+                else "Fallback summary stayed within structured evidence only."
+            ),
         ],
     )
