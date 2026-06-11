@@ -75,9 +75,14 @@ To enable a real local summary model, install the optional dependencies first:
 uv sync --extra summary
 ```
 
+This installs the Python-side runtime needed for the local SLM path, including `transformers`.
+The repo already includes `torch` in the base dependencies. The first run may still download the
+configured model weights from Hugging Face if they are not already present in the local cache.
+
 Then run the app with the local SLM provider enabled:
 
 ```bash
+POZIFY_MOCK_MODE=0 \
 POZIFY_SUMMARY_PROVIDER=slm_local \
 POZIFY_SUMMARY_BACKEND=transformers \
 POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct \
@@ -95,6 +100,31 @@ Relevant summary environment variables:
 - `POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct`
 - `POZIFY_SUMMARY_MAX_TOKENS=512`
 - `POZIFY_SUMMARY_TEMPERATURE=0.2`
+
+To verify that the run actually used the SLM provider, inspect the `JSON` tab or
+`summary_generation.json` and confirm:
+
+- `summary_provider` is `slm_local`
+- `summary_backend` is `transformers`
+- `summary_model` is `Qwen/Qwen2.5-3B-Instruct` or your configured model
+
+If you instead see:
+
+```json
+"summary_provider": "template",
+"summary_backend": null,
+"summary_model": null
+```
+
+then the app did not receive `POZIFY_SUMMARY_PROVIDER=slm_local` and stayed on the default
+template provider.
+
+Common fixes:
+
+1. Stop the running app process completely.
+2. Start it again from the same terminal with the full command above.
+3. Ensure the optional dependencies are installed with `uv sync --extra summary`.
+4. Re-run the analysis and check `summary_generation.json` again.
 
 Backend implementations live in `src/pozify/steps/pose_backends/` and return the same
 `PoseDetection` shape, so downstream steps do not depend on a specific model library. A reserved
