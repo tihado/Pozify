@@ -373,7 +373,7 @@ input[type="text"]:focus,
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin: 16px 0;
 }
@@ -430,6 +430,78 @@ input[type="text"]:focus,
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+
+.issue-timeline {
+  margin-top: 14px;
+  border: 1px solid rgba(37, 44, 31, 0.12);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 253, 247, 0.62);
+}
+
+.timeline-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.timeline-head h3 {
+  margin: 0;
+  color: var(--forest);
+  font-size: 0.98rem;
+}
+
+.timeline-head span,
+.timeline-meta span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.timeline-list {
+  display: grid;
+  gap: 8px;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.36fr) minmax(0, 0.64fr);
+  gap: 12px;
+  border-left: 3px solid var(--clay);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 249, 236, 0.72);
+}
+
+.timeline-main strong,
+.timeline-main span {
+  display: block;
+}
+
+.timeline-main strong {
+  color: var(--forest-deep);
+  font-size: 0.95rem;
+}
+
+.timeline-main span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.timeline-meta span {
+  border-radius: 999px;
+  padding: 6px 8px;
+  background: rgba(33, 79, 58, 0.08);
 }
 
 .quality-list span {
@@ -530,6 +602,11 @@ input[type="text"]:focus,
   }
 
   .panel-head {
+    display: grid;
+  }
+
+  .timeline-item,
+  .timeline-head {
     display: grid;
   }
 }

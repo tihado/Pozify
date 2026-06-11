@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pozify.contracts import PoseFrame
-from pozify.steps.exercise_analyzers.base import (
+from pozify.exercises.shared.analyzer import (
     ExerciseMetricResult,
     mean_visibility,
     range_optional,
