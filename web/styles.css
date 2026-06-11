@@ -339,6 +339,66 @@ input[type="text"]:focus,
   opacity: 0.72;
 }
 
+.progress-panel {
+  border: 1px solid rgba(37, 44, 31, 0.12);
+  border-radius: 8px;
+  margin-top: 14px;
+  padding: 14px;
+  background: rgba(255, 253, 247, 0.66);
+}
+
+.progress-panel h3 {
+  margin: 0 0 12px;
+  color: var(--forest);
+  font-size: 0.96rem;
+}
+
+.progress-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progress-step {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.progress-step.done {
+  color: #304133;
+}
+
+.progress-step.active {
+  color: var(--forest-deep);
+  font-weight: 600;
+}
+
+.progress-dot {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(33, 79, 58, 0.3);
+  border-radius: 999px;
+  margin-top: 4px;
+  background: rgba(255, 253, 247, 0.9);
+}
+
+.progress-step.done .progress-dot {
+  border-color: var(--forest);
+  background: var(--forest);
+}
+
+.progress-step.active .progress-dot {
+  border-color: var(--clay);
+  background: var(--clay);
+  box-shadow: 0 0 0 5px rgba(190, 104, 75, 0.14);
+}
+
 .result-stage {
   display: grid;
   min-height: 470px;
