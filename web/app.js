@@ -1,7 +1,6 @@
 import React, {
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "https://esm.sh/react@18.2.0";
 import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
@@ -89,14 +88,23 @@ const runningProgressSteps = [
     text: "Almost there. I am checking the moments that may need a small fix.",
     delayMs: 3900,
   },
+  {
+    id: "render",
+    text: "I am preparing your annotated video and issue clips.",
+    delayMs: 4800,
+  },
+  {
+    id: "coach",
+    text: "I am turning the scan into coaching notes you can use right away.",
+    delayMs: 5600,
+  },
 ];
 
-function runningProgressState(activeIndex = 0) {
+function pendingProgressState() {
   return runningProgressSteps.map((step, index) => ({
     id: step.id,
     text: step.text,
-    status:
-      index < activeIndex ? "done" : index === activeIndex ? "active" : "pending",
+    status: index === 0 ? "active" : "pending",
   }));
 }
 
@@ -136,7 +144,67 @@ function finalProgressState(result) {
         ? `I found ${issues.length} coaching point${issues.length === 1 ? "" : "s"} worth reviewing.`
         : "Good news, I did not spot any clear form issues in this set.",
     },
+    {
+      id: "render",
+      status: "done",
+      text: result.annotated_video_url
+        ? "Your annotated video is ready."
+        : "I could not render an annotated video, but the report is ready.",
+    },
+    {
+      id: "coach",
+      status: "done",
+      text: "Coach notes are ready.",
+    },
   ];
+}
+
+function applyProgressEvent(currentSteps, event) {
+  const baseSteps = currentSteps.length ? currentSteps : pendingProgressState();
+  const knownStepIds = new Set(runningProgressSteps.map((step) => step.id));
+  if (!knownStepIds.has(event.step)) return baseSteps;
+  return baseSteps.map((step) =>
+    step.id === event.step
+      ? {
+          ...step,
+          status: event.status || "active",
+          text: event.text || step.text,
+        }
+      : step,
+  );
+}
+
+async function readAnalysisStream(response, onEvent) {
+  if (!response.body) throw new Error("Streaming is not available in this browser.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line);
+      if (event.type === "progress") onEvent(event);
+      if (event.type === "complete") result = event.result;
+      if (event.type === "error") throw new Error(event.detail || "Analysis failed.");
+    }
+  }
+
+  if (buffer.trim()) {
+    const event = JSON.parse(buffer);
+    if (event.type === "progress") onEvent(event);
+    if (event.type === "complete") result = event.result;
+    if (event.type === "error") throw new Error(event.detail || "Analysis failed.");
+  }
+
+  if (!result) throw new Error("Analysis finished without a report.");
+  return result;
 }
 
 function ProgressPanel({ steps }) {
@@ -701,7 +769,6 @@ function App() {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [progressSteps, setProgressSteps] = useState([]);
-  const progressTimers = useRef([]);
 
   const previewUrl = useMemo(
     () => (file ? URL.createObjectURL(file) : ""),
@@ -721,29 +788,6 @@ function App() {
     };
   }, [previewUrl]);
 
-  useEffect(() => {
-    return () => {
-      progressTimers.current.forEach((timer) => clearTimeout(timer));
-    };
-  }, []);
-
-  function clearProgressTimers() {
-    progressTimers.current.forEach((timer) => clearTimeout(timer));
-    progressTimers.current = [];
-  }
-
-  function startProgressTimeline() {
-    clearProgressTimers();
-    setProgressSteps(runningProgressState(0));
-    progressTimers.current = runningProgressSteps
-      .slice(1)
-      .map((step, index) =>
-        setTimeout(() => {
-          setProgressSteps(runningProgressState(index + 1));
-        }, step.delayMs),
-      );
-  }
-
   function toggleLimitation(value) {
     setLimitations((current) =>
       current.includes(value)
@@ -757,7 +801,7 @@ function App() {
     setError("");
     setStatus("running");
     setResult(null);
-    startProgressTimeline();
+    setProgressSteps(pendingProgressState());
 
     const payload = new FormData();
     if (file) payload.append("video", file);
@@ -769,18 +813,23 @@ function App() {
     payload.append("equipment", equipment);
 
     try {
-      const response = await fetch("/api/analyze", {
+      const response = await fetch("/api/analyze/stream", {
         method: "POST",
         body: payload,
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Analysis failed.");
-      clearProgressTimers();
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || "Analysis failed.");
+      }
+      const body = await readAnalysisStream(response, (progressEvent) => {
+        setProgressSteps((currentSteps) =>
+          applyProgressEvent(currentSteps, progressEvent),
+        );
+      });
       setResult(body);
       setProgressSteps(finalProgressState(body));
       setStatus("complete");
     } catch (caught) {
-      clearProgressTimers();
       setError(caught.message || "Analysis failed.");
       setProgressSteps([
         {
