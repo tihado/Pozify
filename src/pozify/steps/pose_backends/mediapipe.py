@@ -42,7 +42,9 @@ class MediaPipePoseBackend:
         results = self._pose.process(rgb_frame)
         return PoseDetection(
             landmarks=landmark_list_to_dict(getattr(results, "pose_landmarks", None)),
-            world_landmarks=landmark_list_to_dict(getattr(results, "pose_world_landmarks", None)),
+            world_landmarks=landmark_list_to_dict(
+                getattr(results, "pose_world_landmarks", None)
+            ),
             source=self.source,
         )
 
@@ -73,7 +75,10 @@ class _MediaPipeTasksPoseAdapter:
         self._landmarker = self._create_landmarker(model_path)
 
     def _create_landmarker(self, model_path: Path) -> Any:
-        base_options = self._mp.tasks.BaseOptions(model_asset_path=str(model_path))
+        base_options = self._mp.tasks.BaseOptions(
+            model_asset_path=str(model_path),
+            delegate=self._mp.tasks.BaseOptions.Delegate.CPU,
+        )
         options = self._mp.tasks.vision.PoseLandmarkerOptions(
             base_options=base_options,
             running_mode=self._mp.tasks.vision.RunningMode.IMAGE,
