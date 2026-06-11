@@ -10,6 +10,7 @@ DEFAULT_MODEL_DIR = Path("models/exercise_router/active")
 DEFAULT_MODEL_CARD = Path("docs/huggingface-router-model-card.md")
 DEFAULT_TRAINING_REPORT = Path("docs/exercise-router-training-report.md")
 ARTIFACT_FILENAMES = (
+    "baseline.joblib",
     "router.joblib",
     "router_selection.json",
     "temporal.pt",
