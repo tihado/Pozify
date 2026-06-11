@@ -88,10 +88,11 @@ Summary:
 
 ## Runtime Loading
 
-Pozify can load this repository by setting:
+Pozify loads this repository by default. Set `POZIFY_ROUTER_HF_REPO_ID` only to override the default
+with another compatible router repo:
 
 ```bash
-export POZIFY_ROUTER_HF_REPO_ID=NLag/pozify-exercise-router
+export POZIFY_ROUTER_HF_REPO_ID=owner/other-pozify-router
 ```
 
 For private repositories, authenticate with `hf auth login` or set `HF_TOKEN`.

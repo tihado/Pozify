@@ -15,7 +15,7 @@ Official references:
 The configured model repository is:
 
 ```text
-NLag/pozify-exercise-router
+build-small-hackathon/pozify-exercise-router
 ```
 
 Create a user access token at:
@@ -53,7 +53,7 @@ Upload the model card and artifacts:
 
 ```bash
 uv run python scripts/upload_exercise_router_to_hf.py \
-  --repo-id NLag/pozify-exercise-router \
+  --repo-id build-small-hackathon/pozify-exercise-router \
   --private
 ```
 
@@ -69,10 +69,11 @@ The upload script creates the repository if needed and uploads:
 
 ## Runtime Configuration
 
-Set the model repository ID for runtime loading:
+The runtime loader uses `build-small-hackathon/pozify-exercise-router` by default. Override the
+model repository ID only when you want to test or deploy a different router repo:
 
 ```bash
-export POZIFY_ROUTER_HF_REPO_ID=NLag/pozify-exercise-router
+export POZIFY_ROUTER_HF_REPO_ID=owner/other-pozify-router
 ```
 
 Optional:
@@ -82,8 +83,8 @@ export POZIFY_ROUTER_HF_REVISION=main
 ```
 
 For private repositories, authenticate with `uv run hf auth login` or set `HF_TOKEN` before running
-the app. The loader first tries Hugging Face when `POZIFY_ROUTER_HF_REPO_ID` is set. If Hub loading
-fails or the variable is unset, it falls back to local files under `models/exercise_router/active/`.
+the app. The loader first tries Hugging Face using the default repo or the override above. If Hub
+loading fails, it falls back to local files under `models/exercise_router/active/`.
 
 Disable Hub loading explicitly:
 

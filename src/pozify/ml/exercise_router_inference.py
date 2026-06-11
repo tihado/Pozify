@@ -14,6 +14,7 @@ from pozify.ml.exercise_router_temporal import TorchTemporalRouter
 
 DEFAULT_MODEL_DIR = Path("models/exercise_router/active")
 ACTIVE_SELECTION_FILENAME = "router_selection.json"
+DEFAULT_HF_REPO_ID = "build-small-hackathon/pozify-exercise-router"
 HF_REPO_ID_ENV = "POZIFY_ROUTER_HF_REPO_ID"
 HF_REVISION_ENV = "POZIFY_ROUTER_HF_REVISION"
 HF_DISABLE_ENV = "POZIFY_ROUTER_DISABLE_HF"
@@ -84,7 +85,7 @@ def load_router_model_from_hf(
     if _env_truthy(os.getenv(HF_DISABLE_ENV)):
         return None
 
-    repo_id = repo_id or os.getenv(HF_REPO_ID_ENV)
+    repo_id = repo_id or os.getenv(HF_REPO_ID_ENV) or DEFAULT_HF_REPO_ID
     if not repo_id:
         return None
 

@@ -265,8 +265,9 @@ comparison or fallback.
 
 To publish and load the router from Hugging Face, use the setup notes in
 [docs/huggingface-router-release.md](docs/huggingface-router-release.md). The draft model card is in
-[docs/huggingface-router-model-card.md](docs/huggingface-router-model-card.md). The current model
-repository is `NLag/pozify-exercise-router`.
+[docs/huggingface-router-model-card.md](docs/huggingface-router-model-card.md). Runtime loading uses
+`build-small-hackathon/pozify-exercise-router` by default; set `POZIFY_ROUTER_HF_REPO_ID` only to
+override it.
 
 Custom unknown clips can be uploaded into the data volume at `/data/raw/custom_unknown/` before the
 `features` stage. Use consented clips only; useful unknown examples include idle standing, walking

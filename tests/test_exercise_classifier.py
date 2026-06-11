@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -22,6 +23,8 @@ from pozify.ml.exercise_router_features import (
     window_vector_feature_names,
 )
 from pozify.ml.exercise_router_inference import (
+    DEFAULT_HF_REPO_ID,
+    HF_DISABLE_ENV,
     RouterModelBundle,
     WindowRouterPrediction,
     aggregate_window_predictions,
@@ -210,7 +213,8 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            bundle = load_router_model(model_dir)
+            with patch.dict(os.environ, {HF_DISABLE_ENV: "1"}):
+                bundle = load_router_model(model_dir)
 
         self.assertIsNotNone(bundle)
         assert bundle is not None
@@ -258,6 +262,43 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
         self.assertEqual(bundle.model_kind, "baseline")
         self.assertEqual(bundle.labels, tuple(ROUTER_LABELS))
 
+    def test_hf_loader_defaults_to_pozify_router_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir)
+            artifact_path = model_dir / "router.joblib"
+            selection_path = model_dir / "router_selection.json"
+            joblib.dump(
+                {
+                    "model": _FakePushUpModel(),
+                    "labels": list(ROUTER_LABELS),
+                    "model_kind": "baseline",
+                },
+                artifact_path,
+            )
+            selection_path.write_text(
+                json.dumps({"selected_artifact": artifact_path.name}),
+                encoding="utf-8",
+            )
+
+            def fake_download(*, repo_id: str, filename: str, revision: str | None) -> Path:
+                self.assertEqual(repo_id, DEFAULT_HF_REPO_ID)
+                self.assertIsNone(revision)
+                return {"router_selection.json": selection_path, "router.joblib": artifact_path}[filename]
+
+            with (
+                patch.dict(os.environ, {}, clear=True),
+                patch(
+                    "pozify.ml.exercise_router_inference._hf_hub_download",
+                    side_effect=fake_download,
+                ),
+            ):
+                bundle = load_router_model_from_hf()
+
+        self.assertIsNotNone(bundle)
+        assert bundle is not None
+        self.assertEqual(bundle.model_kind, "baseline")
+        self.assertEqual(bundle.labels, tuple(ROUTER_LABELS))
+
 
 class ExerciseClassifierStepTests(unittest.TestCase):
     def test_manual_override_bypasses_model_and_validates_contract(self) -> None:
@@ -274,12 +315,13 @@ class ExerciseClassifierStepTests(unittest.TestCase):
 
     def test_missing_model_falls_back_to_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = exercise_classifier.run(
-                _sequence("push_up"),
-                _profile("auto"),
-                mock=False,
-                model_dir=Path(temp_dir),
-            )
+            with patch.dict(os.environ, {HF_DISABLE_ENV: "1"}):
+                result = exercise_classifier.run(
+                    _sequence("push_up"),
+                    _profile("auto"),
+                    mock=False,
+                    model_dir=Path(temp_dir),
+                )
 
         self.assertEqual(result.exercise, "unknown")
         self.assertTrue(result.fallback_required)
