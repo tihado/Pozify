@@ -136,6 +136,11 @@ class PipelineContractTests(unittest.TestCase):
             self.assertTrue(artifact_path.exists(), artifact_name)
             payload = json.loads(artifact_path.read_text(encoding="utf-8"))
             self.assertEqual(sorted(payload.keys()), keys, artifact_name)
+            if artifact_name == "final_report.json":
+                self.assertIn("issue_thumbnail_paths", payload["artifacts"])
+                self.assertIsInstance(payload["artifacts"]["issue_thumbnail_paths"], list)
+                self.assertIn("issue_clip_paths", payload["artifacts"])
+                self.assertIsInstance(payload["artifacts"]["issue_clip_paths"], list)
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertTrue(manifest["mock_mode"])

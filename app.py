@@ -76,11 +76,77 @@ def _artifact_url(run_id: str, path: str | None) -> str | None:
     if not path:
         return None
 
+    if not isinstance(path, str):
+        return None
+
     artifact_path = Path(path).resolve()
     run_root = (RUNS_ROOT / run_id).resolve()
     if run_root not in artifact_path.parents or not artifact_path.is_file():
         return None
     return f"/api/artifacts/{run_id}/{artifact_path.name}"
+
+
+def _artifact_link(run_id: str, name: str, path: str | None) -> dict[str, str] | None:
+    url = _artifact_url(run_id, path)
+    if url is None:
+        return None
+    return {"name": name, "url": url}
+
+
+def _artifact_urls(result: dict[str, Any]) -> list[dict[str, str]]:
+    run_id = result["run_id"]
+    run_dir = Path(str(result["run_dir"]))
+    links: list[dict[str, str]] = []
+    artifact_files = [
+        "final_report.json",
+        "video_manifest.json",
+        "pose_sequence.json",
+        "reps.json",
+        "rep_analysis.json",
+        "variation.json",
+        "issue_markers.json",
+        "coach_summary.json",
+        "verification.json",
+        "manifest.json",
+    ]
+    for filename in artifact_files:
+        link = _artifact_link(run_id, filename, str(run_dir / filename))
+        if link is not None:
+            links.append(link)
+
+    video_link = _artifact_link(
+        run_id,
+        "annotated_video.mp4",
+        result.get("annotated_video_path"),
+    )
+    if video_link is not None:
+        links.append(video_link)
+
+    for thumbnail in result.get("issue_thumbnail_paths", []):
+        if not isinstance(thumbnail, dict):
+            continue
+        path = thumbnail.get("path")
+        issue = thumbnail.get("issue", "issue")
+        rep_id = thumbnail.get("rep_id", "?")
+        if not isinstance(path, str):
+            continue
+        link = _artifact_link(run_id, f"thumbnail_rep_{rep_id}_{issue}.jpg", path)
+        if link is not None:
+            links.append(link)
+
+    for clip in result.get("issue_clip_paths", []):
+        if not isinstance(clip, dict):
+            continue
+        path = clip.get("path")
+        issue = clip.get("issue", "issue")
+        rep_id = clip.get("rep_id", "?")
+        if not isinstance(path, str):
+            continue
+        link = _artifact_link(run_id, f"clip_rep_{rep_id}_{issue}.mp4", path)
+        if link is not None:
+            links.append(link)
+
+    return links
 
 
 @server.post("/api/analyze")
@@ -130,12 +196,37 @@ async def analyze_api(
         if video_path is not None:
             Path(video_path).unlink(missing_ok=True)
 
+    issue_thumbnail_urls = []
+    for thumbnail in result.get("issue_thumbnail_paths", []):
+        if not isinstance(thumbnail, dict):
+            continue
+        path = thumbnail.get("path")
+        if not isinstance(path, str):
+            continue
+        url = _artifact_url(result["run_id"], path)
+        if url is not None:
+            issue_thumbnail_urls.append({**thumbnail, "url": url})
+
+    issue_clip_urls = []
+    for clip in result.get("issue_clip_paths", []):
+        if not isinstance(clip, dict):
+            continue
+        path = clip.get("path")
+        if not isinstance(path, str):
+            continue
+        url = _artifact_url(result["run_id"], path)
+        if url is not None:
+            issue_clip_urls.append({**clip, "url": url})
+
     return {
         "run_id": result["run_id"],
         "run_dir": result["run_dir"],
         "annotated_video_url": _artifact_url(
             result["run_id"], result["annotated_video_path"]
         ),
+        "issue_thumbnail_urls": issue_thumbnail_urls,
+        "issue_clip_urls": issue_clip_urls,
+        "artifact_urls": _artifact_urls(result),
         "final_report_url": f"/api/artifacts/{result['run_id']}/final_report.json",
         "report": result["final_report"],
     }

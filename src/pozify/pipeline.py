@@ -94,7 +94,13 @@ def run_pipeline(
     issues = exercise.mark_issues(reps, analysis, variation)
     write_artifact("issue_markers.json", issues)
 
-    annotated_video_path = annotated_renderer.run(manifest, cleaned_pose_sequence, reps, issues, run_dir)
+    render_artifacts = annotated_renderer.run(
+        manifest,
+        cleaned_pose_sequence,
+        reps,
+        issues,
+        run_dir,
+    )
 
     pose_source = (
         cleaned_pose_sequence.frames[0].pose_quality.get("source")
@@ -127,7 +133,9 @@ def run_pipeline(
         "verification": to_dict(verification),
         "artifacts": {
             "run_dir": str(run_dir),
-            "annotated_video_path": annotated_video_path,
+            "annotated_video_path": render_artifacts.annotated_video_path,
+            "issue_thumbnail_paths": render_artifacts.issue_thumbnail_paths,
+            "issue_clip_paths": render_artifacts.issue_clip_paths,
             "rep_debug_path": str(run_dir / "rep_debug.json"),
             "analysis_mode": analysis_mode,
             "pose_source": pose_source,
@@ -146,7 +154,9 @@ def run_pipeline(
     return {
         "run_id": run_id,
         "run_dir": str(run_dir),
-        "annotated_video_path": annotated_video_path,
+        "annotated_video_path": render_artifacts.annotated_video_path,
+        "issue_thumbnail_paths": render_artifacts.issue_thumbnail_paths,
+        "issue_clip_paths": render_artifacts.issue_clip_paths,
         "manifest_path": str(run_dir / "manifest.json"),
         "final_report": final_report,
     }
