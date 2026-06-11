@@ -81,6 +81,17 @@ EXPECTED_ARTIFACT_KEYS = {
         "variation_confidence",
     ],
     "issue_markers.json": ["issues"],
+    "summary_generation.json": [
+        "backend",
+        "fallback_used",
+        "model",
+        "parse_error",
+        "parse_ok",
+        "prompt_contract_version",
+        "provider",
+        "raw_output_present",
+        "verifier_passed",
+    ],
     "coach_summary.json": [
         "confidence_notes",
         "main_findings",
@@ -184,6 +195,7 @@ class PipelineContractTests(unittest.TestCase):
                 "rep_analysis.json",
                 "variation.json",
                 "issue_markers.json",
+                "summary_generation.json",
                 "coach_summary.json",
                 "verification.json",
                 "final_report.json",
@@ -244,6 +256,36 @@ class PipelineContractTests(unittest.TestCase):
         self.assertEqual(payload_by_step["reps"]["rep_count"], 0)
         self.assertEqual(payload_by_step["issues"]["issue_count"], 0)
         self.assertIn("annotated_video_path", payload_by_step["render"])
+
+    def test_pipeline_falls_back_when_slm_provider_parse_fails(self) -> None:
+        with patch.dict(os.environ, {"POZIFY_SUMMARY_PROVIDER": "slm_local"}):
+            with patch("pozify.steps.summary_provider.create_summary_slm_backend") as create_backend:
+                create_backend.return_value = type(
+                    "FakeBackend",
+                    (),
+                    {
+                        "backend_name": "transformers",
+                        "model_name": "Qwen/Fake",
+                        "generate_text": lambda self, prompt: type(
+                            "BackendResult",
+                            (),
+                            {
+                                "text": "not valid json",
+                                "backend": "transformers",
+                                "model": "Qwen/Fake",
+                            },
+                        )(),
+                    },
+                )()
+                result = pipeline.run_pipeline(
+                    video_path=None, profile_input=PROFILE_INPUT, mock=True
+                )
+
+        report = result["final_report"]
+        self.assertEqual(report["artifacts"]["summary_provider"], "slm_local")
+        self.assertFalse(report["artifacts"]["summary_parse_ok"])
+        self.assertTrue(report["artifacts"]["summary_fallback_used"])
+        self.assertFalse(report["verification"]["passed"])
 
     def test_contract_validation_rejects_missing_required_field(self) -> None:
         payload = {

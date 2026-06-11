@@ -64,6 +64,38 @@ The pose extractor is selected through a backend interface. MediaPipe is the def
 POZIFY_POSE_BACKEND=mediapipe POZIFY_MOCK_MODE=0 uv run python app.py
 ```
 
+## Open-Source SLM Summary Provider
+
+The summary stack now supports an opt-in local open-source SLM provider behind the existing
+provider/verifier/fallback flow. The default summary provider remains `template`.
+
+To enable a real local summary model, install the optional dependencies first:
+
+```bash
+uv sync --extra summary
+```
+
+Then run the app with the local SLM provider enabled:
+
+```bash
+POZIFY_SUMMARY_PROVIDER=slm_local \
+POZIFY_SUMMARY_BACKEND=transformers \
+POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct \
+uv run python app.py
+```
+
+The model output is still treated as a draft. It must parse as valid JSON and pass the verifier.
+If parsing or verification fails, Pozify automatically falls back to the conservative template-based
+summary path.
+
+Relevant summary environment variables:
+
+- `POZIFY_SUMMARY_PROVIDER=template|mock|unsafe_mock|slm_local`
+- `POZIFY_SUMMARY_BACKEND=transformers`
+- `POZIFY_SUMMARY_MODEL=Qwen/Qwen2.5-3B-Instruct`
+- `POZIFY_SUMMARY_MAX_TOKENS=512`
+- `POZIFY_SUMMARY_TEMPERATURE=0.2`
+
 Backend implementations live in `src/pozify/steps/pose_backends/` and return the same
 `PoseDetection` shape, so downstream steps do not depend on a specific model library. A reserved
 `mmpose` backend class is included as the integration point for OpenMMLab MMPose; implementing it
@@ -149,6 +181,7 @@ Each analysis run creates a folder under `runs/<run_id>/`:
 - `issue_markers.json`
 - `annotated_video.mp4`
 - `coach_summary.json`
+- `summary_generation.json`
 - `verification.json`
 - `final_report.json`
 
@@ -175,6 +208,9 @@ coach-style feedback when analysis is blocked.
 
 `rep_debug.json` stores the selected segmentation signal, thresholds, detected extrema, and accepted
 rep segments for debugging rep counting.
+
+`summary_generation.json` stores the summary provider name, backend name, model name, JSON parse
+status, verifier result, and whether the conservative fallback summary was used.
 
 `annotated_video.mp4` is produced when the renderer can decode the input video. It overlays pose
 landmarks, skeleton connections, rep count, and rep boundary labels on top of the source video.

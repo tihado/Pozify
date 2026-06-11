@@ -332,6 +332,8 @@ function SummaryTab({ result }) {
   const warnings = report.video_manifest.quality_warnings || [];
   const issues = report.issue_markers?.issues || [];
   const renderStatus = report.artifacts?.annotated_video_status;
+  const summaryProvider = report.artifacts?.summary_provider || "template";
+  const summaryFallbackUsed = !!report.artifacts?.summary_fallback_used;
   const stats = [
     ["Exercise", report.exercise.exercise],
     ["Confidence", percent(report.exercise.confidence)],
@@ -339,6 +341,7 @@ function SummaryTab({ result }) {
     ["Reps", String(report.reps.reps.length)],
     ["Issues", String(issues.length)],
     ["Render", label(renderStatus || "unknown")],
+    ["Summary source", label(summaryProvider)],
   ];
 
   return h(
@@ -365,6 +368,18 @@ function SummaryTab({ result }) {
       h(NoteList, { title: "Top fixes", items: summary.top_fixes }),
       h(NoteList, { title: "Next session", items: summary.next_session_plan }),
     ),
+    summaryFallbackUsed
+      ? h(
+          "article",
+          { className: "note full-note" },
+          h("h3", null, "Fallback summary"),
+          h(
+            "p",
+            null,
+            "The primary summary provider did not clear the safety checks, so the app showed the conservative fallback summary instead.",
+          ),
+        )
+      : null,
     warnings.length
       ? h(
           "div",
@@ -687,6 +702,7 @@ function CoachTab({ result }) {
       h("p", null, "Coach notes appear after analysis."),
     );
   const summary = result.report.coach_summary;
+  const artifacts = result.report.artifacts || {};
   return h(
     "section",
     { className: "summary" },
@@ -701,6 +717,18 @@ function CoachTab({ result }) {
         title: "Confidence notes",
         items: summary.confidence_notes,
       }),
+    ),
+    h(
+      "article",
+      { className: "note full-note" },
+      h("h3", null, "Summary source"),
+      h(
+        "p",
+        null,
+        artifacts.summary_fallback_used
+          ? `Provider ${label(artifacts.summary_provider || "template")} failed verification or parsing, so the fallback summary is shown.`
+          : `Provider ${label(artifacts.summary_provider || "template")} generated this summary.`,
+      ),
     ),
     h(
       "article",

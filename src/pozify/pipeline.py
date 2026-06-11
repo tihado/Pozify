@@ -7,7 +7,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from pozify.artifacts import write_json
-from pozify.contracts import UserProfile, to_dict
+from pozify.contracts import SummaryGeneration, UserProfile, Verification, to_dict
 from pozify.exercises import create_exercise_strategy
 from pozify.steps import (
     annotated_renderer,
@@ -214,20 +214,27 @@ def run_pipeline(
     if mock_mode:
         mock_steps.insert(0, "exercise_classifier")
 
-    draft_summary = coach_summary.run(
+    draft = coach_summary.generate(
         profile, classification, reps, analysis, variation, issues, mock_steps=mock_steps
     )
+    summary_generation = draft.generation
 
-    verification = verifier.run(
-        draft_summary,
-        issues,
-        variation,
-        classification,
-        mock_steps=mock_steps,
-    )
-    if verification.passed:
-        summary = draft_summary
-    else:
+    if draft.summary is None:
+        verification = Verification(
+            passed=False,
+            checks={
+                "provider_payload_parsed": False,
+                "separates_variation_from_issue": False,
+                "avoids_diagnosis": False,
+                "avoids_injury_prevention_claims": False,
+                "avoids_overconfident_language": False,
+                "includes_confidence_notes_when_required": False,
+            },
+            notes=[
+                "Summary provider failed before verification.",
+                summary_generation.parse_error or "Unknown summary provider failure.",
+            ],
+        )
         summary = coach_summary.build_fallback(
             profile,
             classification,
@@ -238,12 +245,67 @@ def run_pipeline(
             verification_notes=[*verification.notes, "Conservative fallback summary returned."],
             mock_steps=mock_steps,
         )
-        verification = type(verification)(
-            passed=False,
-            checks=verification.checks,
-            notes=[*verification.notes, "Conservative fallback summary returned."],
+        summary_generation = SummaryGeneration(
+            provider=summary_generation.provider,
+            backend=summary_generation.backend,
+            model=summary_generation.model,
+            prompt_contract_version=summary_generation.prompt_contract_version,
+            parse_ok=summary_generation.parse_ok,
+            parse_error=summary_generation.parse_error,
+            verifier_passed=False,
+            fallback_used=True,
+            raw_output_present=summary_generation.raw_output_present,
         )
+    else:
+        verification = verifier.run(
+            draft.summary,
+            issues,
+            variation,
+            classification,
+            mock_steps=mock_steps,
+        )
+        if verification.passed:
+            summary = draft.summary
+            summary_generation = SummaryGeneration(
+                provider=summary_generation.provider,
+                backend=summary_generation.backend,
+                model=summary_generation.model,
+                prompt_contract_version=summary_generation.prompt_contract_version,
+                parse_ok=summary_generation.parse_ok,
+                parse_error=summary_generation.parse_error,
+                verifier_passed=True,
+                fallback_used=False,
+                raw_output_present=summary_generation.raw_output_present,
+            )
+        else:
+            summary = coach_summary.build_fallback(
+                profile,
+                classification,
+                reps,
+                analysis,
+                variation,
+                issues,
+                verification_notes=[*verification.notes, "Conservative fallback summary returned."],
+                mock_steps=mock_steps,
+            )
+            verification = type(verification)(
+                passed=False,
+                checks=verification.checks,
+                notes=[*verification.notes, "Conservative fallback summary returned."],
+            )
+            summary_generation = SummaryGeneration(
+                provider=summary_generation.provider,
+                backend=summary_generation.backend,
+                model=summary_generation.model,
+                prompt_contract_version=summary_generation.prompt_contract_version,
+                parse_ok=summary_generation.parse_ok,
+                parse_error=summary_generation.parse_error,
+                verifier_passed=False,
+                fallback_used=True,
+                raw_output_present=summary_generation.raw_output_present,
+            )
 
+    write_artifact("summary_generation.json", summary_generation)
     write_artifact("coach_summary.json", summary)
     write_artifact("verification.json", verification)
     emit(
@@ -251,6 +313,8 @@ def run_pipeline(
         "done",
         "Coach notes are ready.",
         verification_passed=verification.passed,
+        summary_provider=summary_generation.provider,
+        summary_fallback_used=summary_generation.fallback_used,
     )
 
     final_report = {
@@ -272,6 +336,12 @@ def run_pipeline(
             "issue_thumbnail_paths": render_artifacts.issue_thumbnail_paths,
             "issue_clip_paths": render_artifacts.issue_clip_paths,
             "rep_debug_path": str(run_dir / "rep_debug.json"),
+            "summary_generation_path": str(run_dir / "summary_generation.json"),
+            "summary_provider": summary_generation.provider,
+            "summary_backend": summary_generation.backend,
+            "summary_model": summary_generation.model,
+            "summary_parse_ok": summary_generation.parse_ok,
+            "summary_fallback_used": summary_generation.fallback_used,
             "analysis_mode": analysis_mode,
             "pose_source": pose_source,
             "mock_steps": mock_steps,

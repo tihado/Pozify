@@ -107,6 +107,7 @@ def _artifact_urls(result: dict[str, Any]) -> list[dict[str, str]]:
         "rep_analysis.json",
         "variation.json",
         "issue_markers.json",
+        "summary_generation.json",
         "coach_summary.json",
         "verification.json",
         "manifest.json",
