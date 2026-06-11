@@ -91,7 +91,7 @@ Summary:
 Pozify can load this repository by setting:
 
 ```bash
-export POZIFY_ROUTER_HF_REPO_ID=<owner>/pozify-exercise-router
+export POZIFY_ROUTER_HF_REPO_ID=NLag/pozify-exercise-router
 ```
 
 For private repositories, authenticate with `hf auth login` or set `HF_TOKEN`.
