@@ -95,7 +95,7 @@ When running in real mode, the UI summary now shows:
 ```text
 user profile + input video
 -> video QC
--> 33-point pose landmarker
+-> 17-point 3D pose landmarker
 -> pose cleaning and normalization
 -> exercise classifier
 -> exercise-specific rep counter
@@ -248,6 +248,14 @@ uv run modal run scripts/exercise_router_modal.py --stage train-temporal
 uv run modal run scripts/exercise_router_modal.py --stage evaluate
 ```
 
+The `evaluate` and `all` stages automatically publish the selected router artifacts to Hugging Face
+after evaluation. Set `POZIFY_ROUTER_HF_REPO_ID` and `HF_TOKEN` in `.env` or pass a repo explicitly:
+
+```bash
+uv run modal run scripts/exercise_router_modal.py --stage all --repo-id owner/pozify-exercise-router
+uv run modal run scripts/exercise_router_modal.py --stage publish --repo-id owner/pozify-exercise-router
+```
+
 The latest training metrics and selected-artifact result are recorded in
 [docs/exercise-router-training-report.md](docs/exercise-router-training-report.md).
 Custom data collection is documented in
@@ -265,7 +273,8 @@ compact BiLSTM over 30-frame feature tensors on a Modal A10 GPU and writes `temp
 `temporal_metrics.json`. Its default hyperparameters follow the Riccio exercise-classification paper:
 73 hidden units, 0.2174 dropout, 0.0004 learning rate, batch size 54, and 73 epochs
 (https://arxiv.org/abs/2411.11548). Evaluation scores every available trained artifact, writes
-per-model metrics into `evaluation.json`, and records the active artifact in `router_selection.json`.
+per-model metrics into `evaluation.json`, records the active artifact in `router_selection.json`,
+and publishes artifacts to Hugging Face when the `evaluate` or `all` stage completes.
 The current selection policy prefers the BiLSTM temporal model when it is available; the baseline is
 kept as a fallback/reference artifact.
 

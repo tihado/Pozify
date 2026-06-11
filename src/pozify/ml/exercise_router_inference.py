@@ -9,7 +9,14 @@ from typing import Any
 import numpy as np
 
 from pozify.hf_spaces import router_torch_device
-from pozify.ml.exercise_router_features import ROUTER_LABELS, RouterWindow
+from pozify.ml.exercise_router_features import (
+    FEATURE_SCHEMA,
+    ROUTER_LABELS,
+    ROUTER_LANDMARK_SCHEMA,
+    window_tensor_feature_names,
+    window_vector_feature_names,
+    RouterWindow,
+)
 from pozify.ml.exercise_router_temporal import TorchTemporalRouter
 
 
@@ -39,6 +46,8 @@ class RouterModelBundle:
     labels: tuple[str, ...] = ROUTER_LABELS
     scaler: Any | None = None
     model_kind: str = "baseline"
+    feature_schema: str = FEATURE_SCHEMA
+    landmark_schema: str = ROUTER_LANDMARK_SCHEMA
 
 
 @dataclass(frozen=True)
@@ -137,6 +146,8 @@ def load_router_model_file(path: Path) -> RouterModelBundle:
         model = artifact.get("model")
         if model is None:
             raise ValueError(f"Router artifact {path} is missing a 'model' entry")
+        model_kind = str(artifact.get("model_kind", artifact.get("kind", "baseline")))
+        _validate_router_artifact_metadata(artifact, model_kind=model_kind, path=path)
         label_source = getattr(model, "classes_", None)
         if label_source is None:
             label_source = artifact.get("labels") or artifact.get("classes")
@@ -145,13 +156,12 @@ def load_router_model_file(path: Path) -> RouterModelBundle:
             model=model,
             labels=labels,
             scaler=artifact.get("scaler"),
-            model_kind=str(artifact.get("model_kind", artifact.get("kind", "baseline"))),
+            model_kind=model_kind,
+            feature_schema=str(artifact.get("feature_schema", "")),
+            landmark_schema=str(artifact.get("landmark_schema", "")),
         )
-    return RouterModelBundle(
-        model=artifact,
-        labels=_labels_from_artifact(None, artifact),
-        scaler=None,
-        model_kind="baseline",
+    raise ValueError(
+        f"Router artifact {path} is missing required schema metadata for {FEATURE_SCHEMA}"
     )
 
 
@@ -162,6 +172,7 @@ def _load_temporal_router_model_file(path: Path) -> RouterModelBundle:
         raise RuntimeError("torch is required to load temporal exercise router artifacts") from exc
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    _validate_router_artifact_metadata(checkpoint, model_kind="temporal", path=path)
     labels = _labels_from_artifact(checkpoint.get("labels"), checkpoint)
     model = TorchTemporalRouter(
         checkpoint=checkpoint,
@@ -173,7 +184,37 @@ def _load_temporal_router_model_file(path: Path) -> RouterModelBundle:
         labels=labels,
         scaler=None,
         model_kind=str(checkpoint.get("model_kind", "temporal")),
+        feature_schema=str(checkpoint.get("feature_schema", "")),
+        landmark_schema=str(checkpoint.get("landmark_schema", "")),
     )
+
+
+def _validate_router_artifact_metadata(
+    artifact: dict[str, Any],
+    *,
+    model_kind: str,
+    path: Path,
+) -> None:
+    feature_schema = artifact.get("feature_schema")
+    landmark_schema = artifact.get("landmark_schema")
+    if feature_schema != FEATURE_SCHEMA or landmark_schema != ROUTER_LANDMARK_SCHEMA:
+        raise ValueError(
+            f"Router artifact {path} uses incompatible schema: "
+            f"feature_schema={feature_schema!r}, landmark_schema={landmark_schema!r}"
+        )
+
+    input_size = artifact.get("input_size")
+    if input_size is None:
+        return
+    expected_size = (
+        len(window_tensor_feature_names())
+        if model_kind == "temporal"
+        else len(window_vector_feature_names())
+    )
+    if int(input_size) != expected_size:
+        raise ValueError(
+            f"Router artifact {path} input_size={input_size} does not match {expected_size}"
+        )
 
 
 def predict_window_probabilities(
@@ -184,6 +225,10 @@ def predict_window_probabilities(
         return []
 
     labels = _labels_from_artifact(bundle.labels, bundle.model)
+    if bundle.feature_schema != FEATURE_SCHEMA or bundle.landmark_schema != ROUTER_LANDMARK_SCHEMA:
+        raise ValueError(
+            "Router model schema does not match current pose feature schema"
+        )
     if bundle.model_kind == "temporal":
         inputs = np.stack([window.tensor for window in windows]).astype(np.float32)
     else:

@@ -3,40 +3,46 @@ from __future__ import annotations
 from typing import Any
 
 
+LANDMARK_SCHEMA = "coco17"
+
 LANDMARK_NAMES = [
     "nose",
-    "left_eye_inner",
     "left_eye",
-    "left_eye_outer",
-    "right_eye_inner",
     "right_eye",
-    "right_eye_outer",
     "left_ear",
     "right_ear",
-    "mouth_left",
-    "mouth_right",
     "left_shoulder",
     "right_shoulder",
     "left_elbow",
     "right_elbow",
     "left_wrist",
     "right_wrist",
-    "left_pinky",
-    "right_pinky",
-    "left_index",
-    "right_index",
-    "left_thumb",
-    "right_thumb",
     "left_hip",
     "right_hip",
     "left_knee",
     "right_knee",
     "left_ankle",
     "right_ankle",
-    "left_heel",
-    "right_heel",
-    "left_foot_index",
-    "right_foot_index",
+]
+
+MEDIAPIPE_COCO17_INDICES = [
+    0,  # nose
+    2,  # left_eye
+    5,  # right_eye
+    7,  # left_ear
+    8,  # right_ear
+    11,  # left_shoulder
+    12,  # right_shoulder
+    13,  # left_elbow
+    14,  # right_elbow
+    15,  # left_wrist
+    16,  # right_wrist
+    23,  # left_hip
+    24,  # right_hip
+    25,  # left_knee
+    26,  # right_knee
+    27,  # left_ankle
+    28,  # right_ankle
 ]
 
 
@@ -57,6 +63,9 @@ def landmark_list_to_dict(landmarks: Any | None) -> dict[str, dict[str, float]]:
     if landmarks is None:
         return {}
     landmark_values = landmarks.landmark if hasattr(landmarks, "landmark") else landmarks
+    landmark_values = list(landmark_values)
+    if len(landmark_values) >= 33:
+        landmark_values = [landmark_values[index] for index in MEDIAPIPE_COCO17_INDICES]
     return {
         name: landmark_to_dict(landmark)
         for name, landmark in zip(LANDMARK_NAMES, landmark_values, strict=False)

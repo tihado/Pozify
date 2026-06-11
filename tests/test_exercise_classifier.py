@@ -17,7 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pozify.contracts import PoseFrame, PoseSequence, UserProfile, validate_contract
 from pozify.ml.exercise_router_evaluation import evaluate_router_predictions, select_router_candidate
 from pozify.ml.exercise_router_features import (
+    FEATURE_SCHEMA,
     ROUTER_LABELS,
+    ROUTER_LANDMARK_SCHEMA,
     extract_router_windows,
     window_tensor_feature_names,
     window_vector_feature_names,
@@ -142,6 +144,17 @@ class _FakePushUpModel:
         return np.tile(np.asarray([[0.03, 0.91, 0.02, 0.04]]), (values.shape[0], 1))
 
 
+def _fake_router_artifact() -> dict[str, object]:
+    return {
+        "model": _FakePushUpModel(),
+        "labels": list(ROUTER_LABELS),
+        "model_kind": "baseline",
+        "feature_schema": FEATURE_SCHEMA,
+        "landmark_schema": ROUTER_LANDMARK_SCHEMA,
+        "input_size": len(window_vector_feature_names()),
+    }
+
+
 class ExerciseRouterFeatureTests(unittest.TestCase):
     def test_extracts_windows_for_supported_exercise_motion(self) -> None:
         for exercise in ("squat", "push_up", "shoulder_press"):
@@ -163,6 +176,17 @@ class ExerciseRouterFeatureTests(unittest.TestCase):
 
         self.assertEqual(extract_router_windows(empty), [])
         self.assertEqual(extract_router_windows(_sequence(visibility=0.05)), [])
+
+    def test_missing_landmark_visibility_is_zero(self) -> None:
+        sequence = _sequence("push_up")
+        frame = sequence.frames[0]
+        frame.landmarks.pop("nose")
+
+        windows = extract_router_windows(sequence, min_mean_visibility=0.0)
+
+        self.assertGreater(len(windows), 0)
+        nose_visibility_index = window_tensor_feature_names().index("nose_visibility")
+        self.assertEqual(windows[0].tensor[0, nose_visibility_index], 0.0)
 
 
 class ExerciseRouterAggregationTests(unittest.TestCase):
@@ -200,14 +224,7 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             model_dir = Path(temp_dir)
             artifact_path = model_dir / "selected.joblib"
-            joblib.dump(
-                {
-                    "model": _FakePushUpModel(),
-                    "labels": ["unknown", "squat", "push_up", "shoulder_press"],
-                    "model_kind": "baseline",
-                },
-                artifact_path,
-            )
+            joblib.dump(_fake_router_artifact(), artifact_path)
             (model_dir / "router_selection.json").write_text(
                 json.dumps({"selected_artifact": artifact_path.name}),
                 encoding="utf-8",
@@ -233,14 +250,7 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
             model_dir = Path(temp_dir)
             artifact_path = model_dir / "router.joblib"
             selection_path = model_dir / "router_selection.json"
-            joblib.dump(
-                {
-                    "model": _FakePushUpModel(),
-                    "labels": list(ROUTER_LABELS),
-                    "model_kind": "baseline",
-                },
-                artifact_path,
-            )
+            joblib.dump(_fake_router_artifact(), artifact_path)
             selection_path.write_text(
                 json.dumps({"selected_artifact": artifact_path.name}),
                 encoding="utf-8",
@@ -267,14 +277,7 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
             model_dir = Path(temp_dir)
             artifact_path = model_dir / "router.joblib"
             selection_path = model_dir / "router_selection.json"
-            joblib.dump(
-                {
-                    "model": _FakePushUpModel(),
-                    "labels": list(ROUTER_LABELS),
-                    "model_kind": "baseline",
-                },
-                artifact_path,
-            )
+            joblib.dump(_fake_router_artifact(), artifact_path)
             selection_path.write_text(
                 json.dumps({"selected_artifact": artifact_path.name}),
                 encoding="utf-8",
@@ -298,6 +301,22 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
         assert bundle is not None
         self.assertEqual(bundle.model_kind, "baseline")
         self.assertEqual(bundle.labels, tuple(ROUTER_LABELS))
+
+    def test_old_router_artifact_without_schema_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir)
+            joblib.dump(
+                {
+                    "model": _FakePushUpModel(),
+                    "labels": list(ROUTER_LABELS),
+                    "model_kind": "baseline",
+                },
+                model_dir / "router.joblib",
+            )
+
+            with patch.dict(os.environ, {HF_DISABLE_ENV: "1"}):
+                with self.assertRaises(ValueError):
+                    load_router_model(model_dir)
 
 
 class ExerciseClassifierStepTests(unittest.TestCase):

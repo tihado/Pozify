@@ -4,7 +4,7 @@ from statistics import pstdev
 from typing import Any, Callable, Protocol
 
 from pozify.contracts import PoseFrame
-from pozify.steps.rep_signals import angle_deg, average_axis, landmark_axis
+from pozify.steps.rep_signals import angle_deg, average_axis, distance, landmark_axis
 
 
 NumberGetter = Callable[[PoseFrame], float | None]
@@ -68,11 +68,7 @@ def safe_ratio(numerator: float | None, denominator: float | None) -> float | No
 
 
 def width(frame: PoseFrame, left: str, right: str) -> float | None:
-    left_x = landmark_axis(frame, left, "x")
-    right_x = landmark_axis(frame, right, "x")
-    if left_x is None or right_x is None:
-        return None
-    return abs(right_x - left_x)
+    return distance(frame, left, right)
 
 
 def mean_pair(
@@ -99,11 +95,16 @@ def side_delta(
 def torso_lean_deg(frame: PoseFrame, side: str) -> float | None:
     shoulder_x = landmark_axis(frame, f"{side}_shoulder", "x")
     shoulder_y = landmark_axis(frame, f"{side}_shoulder", "y")
+    shoulder_z = landmark_axis(frame, f"{side}_shoulder", "z")
     hip_x = landmark_axis(frame, f"{side}_hip", "x")
     hip_y = landmark_axis(frame, f"{side}_hip", "y")
-    if None in {shoulder_x, shoulder_y, hip_x, hip_y}:
+    hip_z = landmark_axis(frame, f"{side}_hip", "z")
+    if None in {shoulder_x, shoulder_y, shoulder_z, hip_x, hip_y, hip_z}:
         return None
-    horizontal_offset = abs(float(shoulder_x) - float(hip_x))
+    horizontal_offset = (
+        (float(shoulder_x) - float(hip_x)) ** 2
+        + (float(shoulder_z) - float(hip_z)) ** 2
+    ) ** 0.5
     vertical_offset = abs(float(shoulder_y) - float(hip_y))
     if vertical_offset <= 1e-6:
         return None
