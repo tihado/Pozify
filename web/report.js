@@ -490,7 +490,6 @@ function CoachOverview({ result }) {
   const summary = result.report.coach_summary;
   const coachArtifacts = result.report.artifacts || {};
   const coachSource = coachArtifacts.coach_summary_source || "";
-  const coachProvider = coachArtifacts.coach_summary_provider || "n/a";
   const coachModel = coachArtifacts.coach_summary_model || "n/a";
   const verifierBypassed = Boolean(
     coachArtifacts.coach_summary_verifier_bypassed,
@@ -517,9 +516,7 @@ function CoachOverview({ result }) {
       h(
         "div",
         { className: "coach-meta-stack" },
-        metaChip(`Provider: ${coachProvider}`, "blue"),
         metaChip(`Model: ${coachModel}`),
-        metaChip(`Source: ${coachSource || "n/a"}`, isFallback ? "watch" : "strong"),
       ),
     ),
     isFallback || verifierBypassed
