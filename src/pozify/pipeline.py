@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
+from pozify import sample_pose_cache
 from pozify.artifacts import write_json
 from pozify.contracts import UserProfile, to_dict
 from pozify.env import env_truthy, load_local_env
@@ -116,8 +117,12 @@ def run_pipeline(
         "active",
         "Now I am mapping your posture and tracking the key body landmarks.",
     )
-    pose_sequence = pose_landmarker.run(manifest, mock=mock_mode)
-    cleaned_pose_sequence = pose_cleaning.run(pose_sequence)
+    cached_pose_sequence = None if mock_mode else sample_pose_cache.load(manifest)
+    if cached_pose_sequence is None:
+        pose_sequence = pose_landmarker.run(manifest, mock=mock_mode)
+        cleaned_pose_sequence = pose_cleaning.run(pose_sequence)
+    else:
+        cleaned_pose_sequence = cached_pose_sequence
     write_artifact("pose_sequence.json", cleaned_pose_sequence)
     pose_source = (
         cleaned_pose_sequence.frames[0].pose_quality.get("source")
@@ -131,6 +136,7 @@ def run_pipeline(
         frame_count=len(cleaned_pose_sequence.frames),
         pose_source=pose_source,
         pose_valid_ratio=cleaned_pose_sequence.pose_valid_ratio,
+        pose_cache_hit=cached_pose_sequence is not None,
     )
 
     emit("exercise", "active", "Let me figure out which exercise you are doing.")

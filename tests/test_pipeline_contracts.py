@@ -14,7 +14,16 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify import pipeline
-from pozify.contracts import CoachSummary, ContractValidationError, UserProfile, Verification, validate_contract
+from pozify.contracts import (
+    CoachSummary,
+    ContractValidationError,
+    PoseFrame,
+    PoseSequence,
+    UserProfile,
+    Verification,
+    VideoManifest,
+    validate_contract,
+)
 from pozify.exercise_catalog import USER_SELECTABLE_EXERCISES
 from pozify.steps.coach_summary import CoachSummaryResult
 
@@ -218,6 +227,83 @@ class PipelineContractTests(unittest.TestCase):
         self.assertTrue(report["video_manifest"]["analysis_allowed"])
         self.assertEqual(report["video_manifest"]["width"], 640)
         self.assertEqual(report["video_manifest"]["height"], 480)
+
+    def test_pipeline_uses_cached_sample_pose_sequence_when_available(self) -> None:
+        fixture = self._write_video("sample.mp4", duration_sec=1 / 30)
+        manifest = VideoManifest(
+            video_path=str(fixture),
+            fps=30.0,
+            duration_sec=0.033,
+            total_frames=1,
+            sampled_frames=1,
+            width=640,
+            height=480,
+            codec="mp4v",
+            container="mp4",
+            brightness_mean=120.0,
+            blur_laplacian_var=80.0,
+            quality_warnings=[],
+            analysis_allowed=True,
+        )
+        cached_sequence = PoseSequence(
+            frames=[
+                PoseFrame(
+                    frame_index=0,
+                    timestamp_sec=0.0,
+                    landmarks={
+                        "left_hip": {
+                            "x": 0.4,
+                            "y": 0.5,
+                            "z": 0.0,
+                            "visibility": 0.9,
+                        }
+                    },
+                    world_landmarks={},
+                    pose_quality={
+                        "source": "mediapipe_pose",
+                        "mean_visibility": 0.9,
+                        "landmark_schema": "coco17",
+                    },
+                )
+            ],
+            normalized=True,
+            smoothing_method="exponential_smoothing",
+            pose_valid_ratio=1.0,
+        )
+        events: list[dict[str, object]] = []
+
+        with (
+            patch("pozify.pipeline.video_qc.run", return_value=manifest),
+            patch(
+                "pozify.pipeline.sample_pose_cache.load",
+                return_value=cached_sequence,
+            ) as load_cache,
+            patch("pozify.pipeline.pose_landmarker.run") as run_landmarker,
+            patch("pozify.pipeline.pose_cleaning.run") as run_cleaning,
+        ):
+            result = pipeline.run_pipeline(
+                video_path=str(fixture),
+                profile_input={**PROFILE_INPUT, "intended_exercise": "unknown"},
+                mock=False,
+                progress=events.append,
+            )
+
+        load_cache.assert_called_once_with(manifest)
+        run_landmarker.assert_not_called()
+        run_cleaning.assert_not_called()
+
+        run_dir = Path(str(result["run_dir"]))
+        pose_payload = json.loads((run_dir / "pose_sequence.json").read_text())
+        self.assertEqual(
+            pose_payload["frames"][0]["pose_quality"]["source"],
+            "mediapipe_pose",
+        )
+        pose_done = next(
+            event
+            for event in events
+            if event.get("step") == "pose" and event.get("status") == "done"
+        )
+        self.assertTrue(pose_done["payload"]["pose_cache_hit"])  # type: ignore[index]
 
     def test_pipeline_emits_progress_after_steps(self) -> None:
         events: list[dict[str, object]] = []
