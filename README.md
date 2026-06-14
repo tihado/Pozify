@@ -16,11 +16,26 @@ tags:
   - fitness
   - video-analysis
   - llama-cpp
+  - track:backyard
+  - sponsor:openbmb
+  - sponsor:openai
+  - sponsor:nvidia
+  - sponsor:modal
+  - achievement:offgrid
+  - achievement:welltuned
+  - achievement:offbrand
+  - achievement:llama
+  - achievement:sharing
+  - achievement:fieldnotes
 ---
 
 # Pozify
 
-Pozify turns a short workout video into a structured form-review report:
+Pozify is a small-model workout form coach for people who want to train at home but still need
+clear, trustworthy feedback. It is built for users who avoid gyms because they are far away, too
+crowded, intimidating, or too expensive to replace with a 1:1 personal trainer.
+
+Upload a short workout video and Pozify turns it into a structured, grounded form-review report:
 
 - exercise detected
 - reps counted
@@ -36,23 +51,98 @@ retrieval, and a small summary model.
 Pozify is not a medical device. It does not diagnose injuries, claim injury prevention, or replace a
 qualified trainer, clinician, or physical therapist.
 
-## Current Status
+![Pozify product demo](docs/assets/demo.png)
 
-The current codebase supports:
+## Hackathon Snapshot
 
-- web app runtime through `app.py`
-- trained exercise routing for `squat`, `push_up`, `shoulder_press`, and `unknown`
-- grounded coach-summary generation from structured JSON artifacts
-- verifier and conservative fallback summaries
-- Modal training pipelines for both the exercise router and coach-summary model
+- Track: `Backyard AI`
+- Core user impact: affordable at-home workout feedback without needing a gym or private coach
+- Submission format: `Gradio Space`
+- Build Small fit: every runtime model used by Pozify is under the `32B` cap
+- Demo video: `ADD_PUBLIC_DEMO_LINK`
+- Social post: `ADD_PUBLIC_SOCIAL_POST_LINK`
+- Hugging Face Space: [build-small-hackathon/Pozify](https://huggingface.co/spaces/build-small-hackathon/Pozify)
+- Team repo: [tihado/Pozify](https://github.com/tihado/Pozify)
+- Default coach-summary model: `build-small-hackathon/pozify-coach-summary1`
 
-The current default coach-summary model is:
+## The Problem
 
-- `build-small-hackathon/pozify-coach-summary1`
+Most beginner and intermediate gym users do not need a full-time trainer. They need a fast second
+set of eyes:
 
-Pozify first tries Hugging Face `chat_completion`, then falls back to Hugging Face
-`text_generation` for non-chat model repos. If hosted inference still rejects the repo or returns an
-invalid schema, the app keeps the conservative fallback summary.
+- "Am I doing the right exercise?"
+- "How many clean reps did I actually complete?"
+- "Is this a valid variation or a real issue?"
+- "What should I fix next session?"
+
+Today, that feedback is often inaccessible:
+
+- gyms can be far away or inconvenient
+- crowded spaces make people self-conscious about training in public
+- many users are afraid of doing an exercise wrong and being judged
+- private coaching is effective, but too expensive for regular use
+
+Pozify makes that feedback accessible from a short video, with a pipeline users can inspect instead
+of a black-box answer they just have to trust.
+
+## Why It Stands Out
+
+Pozify is not a generic chatbot and not a vague video captioner. It is a grounded movement-analysis
+pipeline:
+
+- computer vision extracts pose landmarks
+- a tiny trained router identifies the exercise
+- deterministic logic counts reps and tracks issues
+- knowledge cards keep the coaching language exercise-specific
+- a small language model turns structured JSON into a coach summary
+- a verifier catches unsafe or ungrounded summary output
+
+That design is the core product difference: structured evidence first, language second.
+
+## Sponsor Stack
+
+Primary sponsor tools used in this build:
+
+- `Hugging Face Spaces` for the app surface
+- `Hugging Face Inference` for cloud small-model runtime
+- `Modal` for coach-summary training and publishing workflows
+- `OpenAI Codex` for implementation support and hackathon build velocity
+
+Sponsor-fit highlights:
+
+- `Modal`: used to prepare data, train, evaluate, merge, and publish the coach-summary model
+- `OpenAI Codex`: used as the coding copilot during implementation and iteration
+- `Hugging Face`: used across the product surface, cloud inference path, model hosting, and Space deployment
+
+## Why Pozify Fits Build Small
+
+Pozify matches `Backyard AI` because it solves a real everyday problem with a small, practical,
+personal tool. It also strongly matches the broader Build Small philosophy:
+
+- local-first and modular architecture
+- transparent model boundaries instead of one giant opaque system
+- per-component models all under the `32B` limit
+- useful enough for repeated day-to-day use, not just a tech demo
+
+This gives Pozify a practical consumer use case that still feels very "Build Small": local-first,
+inspectable, modular, and cheap enough to run on real-world hardware budgets.
+
+## What Pozify Delivers
+
+For each uploaded workout clip, Pozify produces:
+
+- detected exercise and confidence
+- rep-by-rep analysis JSON
+- valid variation markers versus real issues
+- annotated output video
+- grounded coach summary with fixes and next-session plan
+- provider, model, and summary source metadata in the UI
+
+The UI also makes it obvious whether the coach summary came from:
+
+- `hf_inference`
+- a local merged model
+- or a conservative fallback
 
 ## Product Flow
 
@@ -103,18 +193,14 @@ The trained router is intentionally tiny:
 
 ## Run The App Locally
 
-This repo uses a `src/` layout, but `uv` is configured with `package = false`, so the correct local
-entrypoint is:
+This repo uses a `src/` layout, but `uv` is configured with `package = false`. Run it with:
 
 ```bash
+uv sync
 uv run python app.py
 ```
 
-The app listens at:
-
-```text
-http://127.0.0.1:7860
-```
+Then open `http://127.0.0.1:7860`.
 
 ### Mock vs Real Mode
 
@@ -157,6 +243,8 @@ uv run python app.py
 Pozify tries `chat_completion` first and falls back to `text_generation` when Hugging Face reports
 that the repo is not a chat model. The deterministic fallback summary remains enabled if hosted
 inference is unavailable or the model output fails validation.
+
+Recommended if you want the live Space or local demo to behave predictably during judging.
 
 ### 2. Use the fine-tuned merged model locally
 
@@ -303,36 +391,10 @@ JSON artifacts are validated before they are written. The final report records:
 - coach summary provider/model/source
 - verifier status and bypass flags
 
-## Docs Map
+## Docs
 
-See [docs/01-docs-index.md](docs/01-docs-index.md) for the ordered documentation map.
-
-Most useful operational docs:
-
-- [docs/10-overview-build-small-hackathon-report.md](docs/10-overview-build-small-hackathon-report.md)
-- [docs/20-router-training-report.md](docs/20-router-training-report.md)
-- [docs/21-router-huggingface-release.md](docs/21-router-huggingface-release.md)
-- [docs/30-coach-modal-training.md](docs/30-coach-modal-training.md)
-- [docs/31-coach-training-report.md](docs/31-coach-training-report.md)
-- [docs/40-data-custom-collection-guide.md](docs/40-data-custom-collection-guide.md)
-
-## Project Structure
-
-```text
-app.py
-web/
-src/pozify/
-  pipeline.py
-  contracts.py
-  steps/
-  ml/
-  slm/
-  exercises/
-scripts/
-docs/
-demo/
-runs/
-```
+For the deeper technical write-up, training notes, and data workflow, see
+[docs/01-docs-index.md](docs/01-docs-index.md).
 
 ## Development Checks
 
@@ -348,3 +410,10 @@ Run the real MediaPipe fixture smoke test only when the fixture is available:
 POZIFY_RUN_REAL_POSE_TESTS=1 \
 uv run python -m unittest tests.test_pose_steps.PoseStepTests.test_real_sample_mov_extracts_pose_landmarks
 ```
+
+### Contributors
+
+- 🚀 [@nvti](https://github.com/nvti)
+- 🌿 [@honghanhh](https://github.com/honghanhh)
+- 🔧 [@NLag](https://github.com/NLag)
+- ✨ [pnhneee](https://github.com/ctpnheee)
