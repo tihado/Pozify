@@ -13,8 +13,10 @@ CARD_TYPE_ORDER = {
     "exercise": 0,
     "variation": 1,
     "issue": 2,
-    "goal": 3,
-    "safety_rule": 4,
+    "equipment": 3,
+    "goal": 4,
+    "goal_overlay": 5,
+    "safety_rule": 6,
 }
 
 
@@ -78,6 +80,45 @@ def _card(
         related_cards=related_cards,
         source_kind=source_kind,
         source_path=source_path,
+    )
+
+
+def _equipment_card(
+    equipment: str,
+    title: str,
+    summary: str,
+    coaching_point: str,
+) -> KnowledgeCard:
+    return _card(
+        f"equipment:{equipment}",
+        "equipment",
+        (equipment,),
+        title,
+        summary,
+        (
+            "Treat equipment as context for cue wording, not as a new issue.",
+        ),
+        (coaching_point,),
+    )
+
+
+def _goal_overlay_card(
+    exercise: str,
+    goal: str,
+    title: str,
+    summary: str,
+    coaching_points: tuple[str, ...],
+) -> KnowledgeCard:
+    return _card(
+        f"goal_overlay:{exercise}:{goal}",
+        "goal_overlay",
+        (f"{exercise}:{goal}",),
+        title,
+        summary,
+        (
+            "Use this overlay only as a prioritization hint for the detected exercise and goal.",
+        ),
+        coaching_points,
     )
 
 
@@ -299,6 +340,84 @@ CARD_REGISTRY: tuple[KnowledgeCard, ...] = (
         "Beginner practice coaching should stay simple, encouraging, and concrete.",
         ("Limit the number of corrections in a single summary.",),
         ("Pick the top one or two form priorities for next time.",),
+    ),
+    _equipment_card(
+        "bodyweight",
+        "Bodyweight Context",
+        "Bodyweight sessions should keep cues simple and focused on repeatable control.",
+        "Prefer control and repeatability cues that do not assume external load adjustments.",
+    ),
+    _equipment_card(
+        "dumbbell",
+        "Dumbbell Context",
+        "Dumbbell sessions can use load-management cues, but only as context rather than a requirement.",
+        "If range or symmetry drifts, favor tempo or setup cues before suggesting heavier changes.",
+    ),
+    _equipment_card(
+        "barbell",
+        "Barbell Context",
+        "Barbell sessions may benefit from setup and path-consistency cues, while still staying grounded in the evidence.",
+        "Keep the coaching focused on bar path, balance, and repeatable setup when the evidence supports it.",
+    ),
+    _goal_overlay_card(
+        "squat",
+        "strength",
+        "Squat Strength Overlay",
+        "For strength-focused squats, prioritize the highest-value rep-quality cue rather than many small changes.",
+        (
+            "Lead with the one squat fix that most affects repeatable depth or balance.",
+            "Keep the next-session plan short and repeatable.",
+        ),
+    ),
+    _goal_overlay_card(
+        "squat",
+        "beginner_practice",
+        "Squat Beginner Overlay",
+        "For beginner-practice squats, keep the tone encouraging and corrections minimal.",
+        (
+            "Explain what looked stable before introducing the top squat fix.",
+            "Use simple depth or balance language rather than stacking many cues.",
+        ),
+    ),
+    _goal_overlay_card(
+        "push_up",
+        "beginner_practice",
+        "Push-up Beginner Overlay",
+        "For beginner-practice push-ups, prioritize body-line control and simple repeatable cues.",
+        (
+            "Keep push-up corrections to one or two cues that the athlete can repeat next set.",
+            "Treat valid regressions or grip variations as context, not failure.",
+        ),
+    ),
+    _goal_overlay_card(
+        "push_up",
+        "endurance",
+        "Push-up Endurance Overlay",
+        "For endurance-oriented push-ups, explain what changed later in the set before suggesting fixes.",
+        (
+            "Call out late-set body-line or depth drift when the rep evidence shows it.",
+            "Use pacing and consistency cues for the next session plan.",
+        ),
+    ),
+    _goal_overlay_card(
+        "shoulder_press",
+        "strength",
+        "Shoulder Press Strength Overlay",
+        "For strength-focused presses, prioritize clean top position and left-right consistency.",
+        (
+            "Lead with the top-position or symmetry cue that most affected repeatable reps.",
+            "Keep the next-session plan focused on one or two overhead pressing priorities.",
+        ),
+    ),
+    _goal_overlay_card(
+        "shoulder_press",
+        "mobility",
+        "Shoulder Press Mobility Overlay",
+        "For mobility-oriented presses, stay descriptive about range consistency without diagnosing restriction.",
+        (
+            "Describe the observed top-range consistency without speculating about limitations.",
+            "Favor smooth controlled reps for the next-session comparison.",
+        ),
     ),
     _card(
         "safety:no_diagnosis",
@@ -552,6 +671,38 @@ def cards_for_labels(labels: list[str] | tuple[str, ...]) -> list[KnowledgeCard]
     )
 
 
+def prioritized_coaching_points(cards: list[KnowledgeCard], *, limit: int = 6) -> list[str]:
+    priority_order = {
+        "issue": 0,
+        "variation": 1,
+        "exercise": 2,
+        "equipment": 3,
+        "goal_overlay": 4,
+        "goal": 5,
+        "safety_rule": 6,
+    }
+    ordered_cards = sorted(
+        cards,
+        key=lambda card: (
+            priority_order.get(card.card_type, 99),
+            0 if card.source_kind == "external" else 1,
+            card.card_id,
+        ),
+    )
+    points: list[str] = []
+    seen: set[str] = set()
+    for card in ordered_cards:
+        for point in card.coaching_points:
+            normalized = point.strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            points.append(normalized)
+            if len(points) >= limit:
+                return points
+    return points
+
+
 def retrieve_cards_with_metadata(
     *,
     profile: UserProfile,
@@ -590,7 +741,10 @@ def retrieve_cards(
         variation.detected_variation,
         *variation.not_issues,
         *[issue.issue for issue in issues.issues],
+        profile.equipment,
         profile.goal,
+        f"{classification.exercise}:{profile.goal}",
+        f"{classification.exercise}:{profile.equipment}",
         "no_diagnosis",
         "no_injury_prevention_claim",
         "grounded_only",

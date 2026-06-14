@@ -12,7 +12,7 @@ from pozify.contracts import (
     Variation,
     to_dict,
 )
-from pozify.knowledge_cards import KnowledgeCard
+from pozify.knowledge_cards import KnowledgeCard, prioritized_coaching_points
 
 
 def build_summary_evidence(
@@ -59,6 +59,7 @@ def build_summary_evidence(
             "issues": [to_dict(issue) for issue in issues.issues],
             "top_issue_intervals": top_issue_intervals,
         },
+        "priority_cues": prioritized_coaching_points(cards),
         "knowledge_cards": [to_dict(card) for card in cards],
     }
 
@@ -101,6 +102,7 @@ def build_coach_summary_prompt(
             "Do not diagnose injuries, pain, mobility deficits, or pathology.",
             "Do not claim injury prevention.",
             "Do not treat a valid detected variation or not-issue label as an error.",
+            "Use priority_cues as the first source for phrasing top fixes and next-session guidance.",
             "When referencing an issue or variation, include its exact label in "
             "backticks at least once.",
             "If evidence is limited or confidence is low, say so in confidence_notes.",

@@ -26,9 +26,11 @@ from pozify.env import load_local_env
 import pozify.slm.providers as slm_providers
 from pozify.knowledge_cards import (
     clear_catalog_cache,
+    prioritized_coaching_points,
     retrieve_cards,
     retrieve_cards_with_metadata,
 )
+from pozify.slm.prompting import build_summary_evidence
 from pozify.steps import coach_summary, coach_summary_fallback, verifier
 
 
@@ -267,15 +269,17 @@ class CoachSummaryTests(unittest.TestCase):
 
         card_ids = [card.card_id for card in cards]
         self.assertEqual(
-            card_ids[:4],
+            card_ids[:5],
             [
                 "exercise:push_up",
                 "variation:wide_grip_push_up",
                 "issue:hip_sag",
+                "equipment:bodyweight",
                 "goal:beginner_practice",
             ],
         )
         self.assertIn("safety:no_diagnosis", card_ids)
+        self.assertIn("goal_overlay:push_up:beginner_practice", card_ids)
 
     def test_retrieval_metadata_reports_external_card_usage(self) -> None:
         retrieval = retrieve_cards_with_metadata(
@@ -331,6 +335,43 @@ class CoachSummaryTests(unittest.TestCase):
             self.assertEqual(push_up_card.title, "Push-up Override")
             self.assertEqual(push_up_card.source_kind, "external")
             self.assertEqual(push_up_card.source_path, str(pack_path.resolve()))
+
+    def test_prompt_evidence_includes_prioritized_cues(self) -> None:
+        cards = retrieve_cards(
+            profile=_profile(),
+            classification=_classification(),
+            variation=_variation(),
+            issues=_issues(),
+        )
+
+        evidence = build_summary_evidence(
+            profile=_profile(),
+            classification=_classification(),
+            reps=_reps(),
+            analysis=_analysis(),
+            variation=_variation(),
+            issues=_issues(),
+            cards=cards,
+        )
+
+        self.assertTrue(evidence["priority_cues"])
+        self.assertIn(
+            "Keep shoulders, hips, and ankles moving as one line.",
+            evidence["priority_cues"],
+        )
+
+    def test_prioritized_coaching_points_prefers_issue_and_context_cards(self) -> None:
+        cards = retrieve_cards(
+            profile=_profile(),
+            classification=_classification(),
+            variation=_variation(),
+            issues=_issues(),
+        )
+
+        points = prioritized_coaching_points(cards, limit=4)
+
+        self.assertLessEqual(len(points), 4)
+        self.assertIn("Keep shoulders, hips, and ankles moving as one line.", points)
 
     def test_coach_summary_falls_back_when_model_fails(self) -> None:
         cards = retrieve_cards(
