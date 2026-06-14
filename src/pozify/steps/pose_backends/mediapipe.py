@@ -117,7 +117,7 @@ class _MediaPipeTasksPoseAdapter:
             return gpu_delegate
         if configured_delegate not in {"", "auto"}:
             return self._cpu_delegate()
-        if zero_gpu_enabled() or _cuda_device_visible():
+        if zero_gpu_enabled():
             return gpu_delegate
         return self._cpu_delegate()
 
@@ -193,22 +193,6 @@ def _create_legacy_pose(mediapipe_module: Any) -> Any:
         )
     except OSError as exc:
         raise _native_library_error(exc) from exc
-
-
-def _cuda_device_visible() -> bool:
-    for env_name in ("CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES"):
-        value = os.getenv(env_name)
-        if value and value.strip().lower() not in {"", "-1", "none", "void", "no"}:
-            return True
-
-    try:
-        import torch
-    except Exception:
-        return False
-
-    cuda = getattr(torch, "cuda", None)
-    is_available = getattr(cuda, "is_available", None)
-    return bool(callable(is_available) and is_available())
 
 
 def _native_library_error(exc: OSError) -> PoseBackendUnavailableError:

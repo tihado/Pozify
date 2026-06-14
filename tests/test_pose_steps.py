@@ -325,12 +325,6 @@ class MediaPipeTasksDelegateTests(unittest.TestCase):
         with patch.dict(os.environ, {"SPACES_ZERO_GPU": "1"}, clear=True):
             self.assertEqual(adapter._preferred_delegate(), "gpu")
 
-    def test_mediapipe_tasks_prefers_gpu_when_cuda_device_is_visible(self) -> None:
-        adapter = self._adapter(self._fake_mediapipe())
-
-        with patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "0"}, clear=True):
-            self.assertEqual(adapter._preferred_delegate(), "gpu")
-
     def test_mediapipe_delegate_env_can_force_gpu(self) -> None:
         adapter = self._adapter(self._fake_mediapipe())
 
