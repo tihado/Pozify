@@ -2,6 +2,8 @@
 #    uv export --format requirements.txt --no-dev --no-hashes --frozen --output-file requirements.txt
 absl-py==2.4.0
     # via mediapipe
+accelerate==1.14.0
+    # via pozify
 aiohappyeyeballs==2.6.2
     # via aiohttp
 aiohttp==3.14.1
@@ -121,9 +123,12 @@ httpx==0.28.1
     #   spaces
 huggingface-hub==1.18.0
     # via
+    #   accelerate
     #   gradio
     #   gradio-client
     #   pozify
+    #   tokenizers
+    #   transformers
 hyperframe==6.1.0
     # via h2
 idna==3.18
@@ -171,6 +176,7 @@ networkx==3.6.1 ; python_full_version >= '3.11'
     # via torch
 numpy==1.26.4
     # via
+    #   accelerate
     #   contourpy
     #   gradio
     #   matplotlib
@@ -181,6 +187,7 @@ numpy==1.26.4
     #   pozify
     #   scikit-learn
     #   scipy
+    #   transformers
 nvidia-cublas==13.1.0.3 ; sys_platform == 'linux'
     # via
     #   cuda-toolkit
@@ -228,11 +235,13 @@ orjson==3.11.9
     # via gradio
 packaging==26.2
     # via
+    #   accelerate
     #   gradio
     #   gradio-client
     #   huggingface-hub
     #   matplotlib
     #   spaces
+    #   transformers
 pandas==2.3.3 ; python_full_version < '3.11' or python_full_version >= '3.14'
     # via gradio
 pandas==3.0.3 ; python_full_version >= '3.11' and python_full_version < '3.14'
@@ -247,6 +256,8 @@ propcache==0.5.2
     #   yarl
 protobuf==6.33.6
     # via modal
+psutil==7.2.2
+    # via accelerate
 pycparser==3.0 ; implementation_name != 'PyPy'
     # via cffi
 pydantic==2.12.5
@@ -275,8 +286,12 @@ pytz==2026.2
     #   pandas
 pyyaml==6.0.3
     # via
+    #   accelerate
     #   gradio
     #   huggingface-hub
+    #   transformers
+regex==2026.5.9
+    # via transformers
 requests==2.34.2
     # via spaces
 rich==15.0.0
@@ -285,6 +300,10 @@ rich==15.0.0
     #   typer
 safehttpx==0.1.7
     # via gradio
+safetensors==0.8.0
+    # via
+    #   accelerate
+    #   transformers
 scikit-learn==1.7.2 ; python_full_version < '3.11'
     # via pozify
 scikit-learn==1.9.0 ; python_full_version >= '3.11'
@@ -315,14 +334,22 @@ synchronicity==0.12.3
     # via modal
 threadpoolctl==3.6.0
     # via scikit-learn
+tokenizers==0.22.2
+    # via transformers
 toml==0.10.2
     # via modal
 tomlkit==0.14.0
     # via gradio
 torch==2.11.0
-    # via pozify
+    # via
+    #   accelerate
+    #   pozify
 tqdm==4.68.2
-    # via huggingface-hub
+    # via
+    #   huggingface-hub
+    #   transformers
+transformers==5.12.0
+    # via pozify
 triton==3.6.0 ; sys_platform == 'linux'
     # via torch
 typer==0.25.1
@@ -330,6 +357,7 @@ typer==0.25.1
     #   gradio
     #   hf-gradio
     #   huggingface-hub
+    #   transformers
 types-certifi==2021.10.8.3
     # via modal
 types-toml==0.10.8.20260518

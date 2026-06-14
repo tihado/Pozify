@@ -23,6 +23,7 @@ from pozify.contracts import (
 )
 from pozify.env import load_local_env
 from pozify.knowledge_cards import retrieve_cards
+import pozify.slm.providers as slm_providers
 from pozify.steps import coach_summary, coach_summary_fallback, verifier
 
 
@@ -164,6 +165,42 @@ class CoachSummaryTests(unittest.TestCase):
                     os.getenv("POZIFY_COACH_SUMMARY_MODEL"),
                     "Qwen/Qwen2.5-7B-Instruct",
                 )
+
+    def test_get_coach_summary_model_can_use_local_transformers_provider(self) -> None:
+        local_payload = '{"summary":"ok"}'
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "POZIFY_COACH_SUMMARY_PROVIDER": "local_transformers",
+                    "POZIFY_COACH_SUMMARY_MODEL": "Qwen/Qwen2.5-7B-Instruct",
+                    "POZIFY_COACH_SUMMARY_MAX_TOKENS": "123",
+                    "POZIFY_COACH_SUMMARY_TEMPERATURE": "0",
+                },
+                clear=True,
+            ),
+            patch.object(slm_providers, "load_local_env"),
+            patch.object(
+                slm_providers,
+                "_generate_local_transformers_summary",
+                return_value=local_payload,
+            ) as generate,
+        ):
+            provider = slm_providers.get_coach_summary_model()
+
+            self.assertIsNotNone(provider)
+            generation = provider.generate_summary("coach prompt")
+
+        self.assertEqual(generation.provider, "local_transformers")
+        self.assertEqual(generation.model, "Qwen/Qwen2.5-7B-Instruct")
+        self.assertEqual(generation.text, local_payload)
+        generate.assert_called_once_with(
+            model="Qwen/Qwen2.5-7B-Instruct",
+            prompt="coach prompt",
+            max_tokens=123,
+            temperature=0.0,
+            token=None,
+        )
 
     def test_card_retrieval_is_deterministic_and_grounded(self) -> None:
         cards = retrieve_cards(
