@@ -133,12 +133,12 @@ def _build_summary(
     return " ".join(parts)
 
 
-def transform_dataset_rows(
+def normalize_dataset_rows(
     rows: list[dict[str, Any]],
     *,
     source_dataset: str,
-) -> dict[str, Any]:
-    cards: list[dict[str, Any]] = []
+) -> list[dict[str, Any]]:
+    exercises: list[dict[str, Any]] = []
     for row in rows:
         name_value = _first_present(row, FIELD_CANDIDATES["name"])
         if not isinstance(name_value, str) or not name_value.strip():
@@ -165,9 +165,44 @@ def transform_dataset_rows(
         description_value = _first_present(row, FIELD_CANDIDATES["description"])
         description = description_value.strip() if isinstance(description_value, str) else None
 
-        labels = _dedupe_keep_order(
-            [exercise_label, *(_slugify(alias) for alias in aliases if alias.strip())]
+        exercises.append(
+            {
+                "source_dataset": source_dataset,
+                "exercise_label": exercise_label,
+                "title": title,
+                "aliases": aliases,
+                "category": category.strip() if isinstance(category, str) else None,
+                "equipment": equipment,
+                "primary_muscles": primary_muscles,
+                "secondary_muscles": secondary_muscles,
+                "instructions": instructions,
+                "description": description,
+            }
         )
+
+    exercises.sort(key=lambda item: item["exercise_label"])
+    return exercises
+
+
+def transform_dataset_rows(
+    rows: list[dict[str, Any]],
+    *,
+    source_dataset: str,
+) -> dict[str, Any]:
+    exercises = normalize_dataset_rows(rows, source_dataset=source_dataset)
+    cards: list[dict[str, Any]] = []
+    for exercise in exercises:
+        exercise_label = str(exercise["exercise_label"])
+        title = str(exercise["title"])
+        aliases = [str(item) for item in exercise["aliases"]]
+        category = exercise["category"]
+        equipment = [str(item) for item in exercise["equipment"]]
+        primary_muscles = [str(item) for item in exercise["primary_muscles"]]
+        secondary_muscles = [str(item) for item in exercise["secondary_muscles"]]
+        instructions = [str(item) for item in exercise["instructions"]]
+        description = exercise["description"] if isinstance(exercise["description"], str) else None
+
+        labels = _dedupe_keep_order([exercise_label, *(_slugify(alias) for alias in aliases)])
 
         evidence_rules = [
             "Use structured rep analysis and issue markers instead of inferring directly from raw video.",
@@ -219,6 +254,7 @@ def transform_dataset_rows(
     return {
         "source_dataset": source_dataset,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "normalized_exercise_count": len(exercises),
         "card_count": len(cards),
         "cards": cards,
     }
@@ -271,6 +307,25 @@ def write_card_pack(
     return pack
 
 
+def write_normalized_exercises(
+    *,
+    input_path: Path,
+    output_path: Path,
+    source_dataset: str,
+) -> dict[str, Any]:
+    rows = load_dataset_rows(input_path)
+    exercises = normalize_dataset_rows(rows, source_dataset=source_dataset)
+    payload = {
+        "source_dataset": source_dataset,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "exercise_count": len(exercises),
+        "exercises": exercises,
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return payload
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Convert an exercise dataset export into a Pozify knowledge-card pack."
@@ -280,6 +335,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--output",
         required=True,
         help="Destination path for the generated Pozify card-pack JSON.",
+    )
+    parser.add_argument(
+        "--normalized-output",
+        help="Optional destination path for a normalized exercise-schema JSON export.",
     )
     parser.add_argument(
         "--source-dataset",
@@ -292,6 +351,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+    if args.normalized_output:
+        write_normalized_exercises(
+            input_path=Path(args.input),
+            output_path=Path(args.normalized_output),
+            source_dataset=args.source_dataset,
+        )
     pack = write_card_pack(
         input_path=Path(args.input),
         output_path=Path(args.output),
