@@ -13,6 +13,7 @@ from pozify.steps.pose_backends.base import (
 from pozify.steps.pose_backends.landmarks import landmark_list_to_dict
 
 
+MEDIAPIPE_DELEGATE_ENV = "POZIFY_MEDIAPIPE_DELEGATE"
 POSE_TASK_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
     "pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
@@ -60,23 +61,19 @@ class MediaPipePoseBackend:
                 "MediaPipe is required for the mediapipe pose backend. Install dependencies with uv sync."
             ) from exc
 
-        if hasattr(mp, "solutions"):
+        if _has_tasks_pose_landmarker(mp):
             try:
-                return mp.solutions.pose.Pose(
-                    static_image_mode=False,
-                    model_complexity=1,
-                    smooth_landmarks=False,
-                    enable_segmentation=False,
-                    min_detection_confidence=0.5,
-                    min_tracking_confidence=0.5,
-                )
+                return _MediaPipeTasksPoseAdapter(mp, _ensure_pose_task_model())
             except OSError as exc:
                 raise _native_library_error(exc) from exc
 
-        try:
-            return _MediaPipeTasksPoseAdapter(mp, _ensure_pose_task_model())
-        except OSError as exc:
-            raise _native_library_error(exc) from exc
+        if _has_legacy_pose_solution(mp):
+            return _create_legacy_pose(mp)
+
+        raise PoseBackendUnavailableError(
+            "MediaPipe is installed, but neither Tasks PoseLandmarker nor legacy "
+            "solutions.pose.Pose is available."
+        )
 
 
 class _MediaPipeTasksPoseAdapter:
@@ -110,11 +107,19 @@ class _MediaPipeTasksPoseAdapter:
         return self._mp.tasks.vision.PoseLandmarker.create_from_options(options)
 
     def _preferred_delegate(self) -> Any:
-        if not zero_gpu_enabled():
+        configured_delegate = os.getenv(MEDIAPIPE_DELEGATE_ENV, "auto").strip().lower()
+        if configured_delegate == "cpu":
             return self._cpu_delegate()
 
         delegate = self._mp.tasks.BaseOptions.Delegate
-        return getattr(delegate, "GPU", self._cpu_delegate())
+        gpu_delegate = getattr(delegate, "GPU", self._cpu_delegate())
+        if configured_delegate == "gpu":
+            return gpu_delegate
+        if configured_delegate not in {"", "auto"}:
+            return self._cpu_delegate()
+        if zero_gpu_enabled() or _cuda_device_visible():
+            return gpu_delegate
+        return self._cpu_delegate()
 
     def _cpu_delegate(self) -> Any:
         return self._mp.tasks.BaseOptions.Delegate.CPU
@@ -158,6 +163,52 @@ def _ensure_pose_task_model() -> Path:
     model_path.parent.mkdir(parents=True, exist_ok=True)
     urlretrieve(POSE_TASK_MODEL_URL, model_path)
     return model_path
+
+
+def _has_tasks_pose_landmarker(mediapipe_module: Any) -> bool:
+    tasks = getattr(mediapipe_module, "tasks", None)
+    vision = getattr(tasks, "vision", None)
+    return (
+        getattr(tasks, "BaseOptions", None) is not None
+        and getattr(vision, "PoseLandmarker", None) is not None
+        and getattr(vision, "PoseLandmarkerOptions", None) is not None
+    )
+
+
+def _has_legacy_pose_solution(mediapipe_module: Any) -> bool:
+    solutions = getattr(mediapipe_module, "solutions", None)
+    pose = getattr(solutions, "pose", None)
+    return getattr(pose, "Pose", None) is not None
+
+
+def _create_legacy_pose(mediapipe_module: Any) -> Any:
+    try:
+        return mediapipe_module.solutions.pose.Pose(
+            static_image_mode=False,
+            model_complexity=1,
+            smooth_landmarks=False,
+            enable_segmentation=False,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+    except OSError as exc:
+        raise _native_library_error(exc) from exc
+
+
+def _cuda_device_visible() -> bool:
+    for env_name in ("CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES"):
+        value = os.getenv(env_name)
+        if value and value.strip().lower() not in {"", "-1", "none", "void", "no"}:
+            return True
+
+    try:
+        import torch
+    except Exception:
+        return False
+
+    cuda = getattr(torch, "cuda", None)
+    is_available = getattr(cuda, "is_available", None)
+    return bool(callable(is_available) and is_available())
 
 
 def _native_library_error(exc: OSError) -> PoseBackendUnavailableError:

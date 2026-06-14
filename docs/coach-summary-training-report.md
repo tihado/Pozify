@@ -278,13 +278,13 @@ Because of that, the app falls back even when the runtime resolves the correct r
 
 ### Practical implication
 
-For the app to avoid fallback today, the safest temporary runtime choice is a cloud-hosted model
-that is already supported by Hugging Face Inference, such as:
+The app runtime defaults to the fine-tuned coach-summary model:
 
-- `Qwen/Qwen3-14B`
+- `build-small-hackathon/pozify-coach-summary1`
 
-The fine-tuned merged repo is still useful as a training artifact, but it is not yet plug-and-play
-through the current cloud inference path.
+The deterministic fallback summary remains enabled because hosted inference can still be
+unavailable, reject a model route, or return output that fails schema validation. If needed,
+`Qwen/Qwen3-14B` can still be used as an explicit base-model override.
 
 ## Assessment
 
@@ -308,7 +308,7 @@ through the current cloud inference path.
 
 ### Short term
 
-1. Use `Qwen/Qwen3-14B` as the temporary runtime cloud model.
+1. Use `build-small-hackathon/pozify-coach-summary1` as the default runtime coach model.
 2. Keep the fallback summary enabled in production.
 3. Expand the grounded SFT dataset from more real runs before increasing training complexity.
 4. Add stronger output-format controls or post-processing to improve JSON validity.
@@ -339,7 +339,7 @@ Run the full Modal training flow:
 uv run modal run scripts/coach_summary_modal.py --stage all --epochs 2 --style-weight 0.2 --repo-id build-small-hackathon/pozify-coach-summary1
 ```
 
-Run the app against a cloud-supported fallback-safe runtime model:
+Run the app with the default fine-tuned runtime model:
 
 ```bash
 unset POZIFY_COACH_SUMMARY_MODEL
@@ -349,7 +349,7 @@ uv run python app.py
 Or set the runtime model explicitly:
 
 ```bash
-export POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
+export POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
 uv run python app.py
 ```
 

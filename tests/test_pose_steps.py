@@ -24,7 +24,7 @@ from pozify.steps.pose_backends import (
     PoseDetection,
     landmark_list_to_dict,
 )
-from pozify.steps.pose_backends.mediapipe import _MediaPipeTasksPoseAdapter
+from pozify.steps.pose_backends.mediapipe import MediaPipePoseBackend, _MediaPipeTasksPoseAdapter
 
 
 def _landmark(
@@ -312,13 +312,29 @@ class MediaPipeTasksDelegateTests(unittest.TestCase):
     def test_mediapipe_tasks_prefers_cpu_outside_zero_gpu(self) -> None:
         adapter = self._adapter(self._fake_mediapipe())
 
-        with patch.dict(os.environ, {}, clear=True):
+        torch_without_cuda = SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False))
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.dict(sys.modules, {"torch": torch_without_cuda}),
+        ):
             self.assertEqual(adapter._preferred_delegate(), "cpu")
 
     def test_mediapipe_tasks_prefers_gpu_inside_zero_gpu(self) -> None:
         adapter = self._adapter(self._fake_mediapipe())
 
         with patch.dict(os.environ, {"SPACES_ZERO_GPU": "1"}, clear=True):
+            self.assertEqual(adapter._preferred_delegate(), "gpu")
+
+    def test_mediapipe_tasks_prefers_gpu_when_cuda_device_is_visible(self) -> None:
+        adapter = self._adapter(self._fake_mediapipe())
+
+        with patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "0"}, clear=True):
+            self.assertEqual(adapter._preferred_delegate(), "gpu")
+
+    def test_mediapipe_delegate_env_can_force_gpu(self) -> None:
+        adapter = self._adapter(self._fake_mediapipe())
+
+        with patch.dict(os.environ, {"POZIFY_MEDIAPIPE_DELEGATE": "gpu"}, clear=True):
             self.assertEqual(adapter._preferred_delegate(), "gpu")
 
     def test_mediapipe_tasks_falls_back_to_cpu_when_gpu_delegate_fails(self) -> None:
@@ -328,6 +344,31 @@ class MediaPipeTasksDelegateTests(unittest.TestCase):
             landmarker = adapter._create_landmarker(Path("pose.task"))
 
         self.assertEqual(landmarker.delegate, "cpu")
+
+    def test_mediapipe_backend_prefers_tasks_when_legacy_solution_exists(self) -> None:
+        fake_mediapipe = self._fake_mediapipe()
+
+        class LegacyPose:
+            def __init__(self, **_kwargs: object) -> None:
+                raise AssertionError("legacy CPU-only pose solution should not be used")
+
+        fake_mediapipe.solutions = SimpleNamespace(
+            pose=SimpleNamespace(Pose=LegacyPose),
+        )
+        backend = object.__new__(MediaPipePoseBackend)
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.dict(sys.modules, {"mediapipe": fake_mediapipe}),
+            patch(
+                "pozify.steps.pose_backends.mediapipe._ensure_pose_task_model",
+                return_value=Path("pose.task"),
+            ),
+        ):
+            pose = backend._create_pose()
+
+        self.assertIsInstance(pose, _MediaPipeTasksPoseAdapter)
+        self.assertEqual(pose._landmarker.delegate, "cpu")
 
 
 if __name__ == "__main__":
