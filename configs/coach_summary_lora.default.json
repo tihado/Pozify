@@ -1,0 +1,14 @@
+{
+  "base_model": "Qwen/Qwen2.5-7B-Instruct",
+  "train_file": "/Users/h/Documents/Pozify/data/sft/coach_summary_train.jsonl",
+  "eval_file": "/Users/h/Documents/Pozify/data/sft/coach_summary_eval.jsonl",
+  "output_dir": "/Users/h/Documents/Pozify/models/coach_summary_lora",
+  "lora_r": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.05,
+  "learning_rate": 0.0002,
+  "num_train_epochs": 2,
+  "per_device_train_batch_size": 1,
+  "gradient_accumulation_steps": 8,
+  "max_seq_length": 4096
+}

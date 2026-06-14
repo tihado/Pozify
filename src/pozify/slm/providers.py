@@ -13,6 +13,9 @@ from pozify.hf_spaces import default_spaces_gpu_duration, spaces_gpu
 
 PROVIDER_ENV = "POZIFY_COACH_SUMMARY_PROVIDER"
 MODEL_ENV = "POZIFY_COACH_SUMMARY_MODEL"
+BASE_MODEL_ENV = "POZIFY_COACH_SUMMARY_BASE_MODEL"
+LOCAL_MODEL_DIR_ENV = "POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR"
+ADAPTER_ENV = "POZIFY_COACH_SUMMARY_ADAPTER_ID"
 DISABLE_REMOTE_ENV = "POZIFY_COACH_SUMMARY_DISABLE_REMOTE"
 MAX_TOKENS_ENV = "POZIFY_COACH_SUMMARY_MAX_TOKENS"
 TEMPERATURE_ENV = "POZIFY_COACH_SUMMARY_TEMPERATURE"
@@ -21,7 +24,7 @@ LLAMA_CPP_BASE_URL_ENV = "POZIFY_LLAMA_CPP_BASE_URL"
 LLAMA_CPP_TIMEOUT_ENV = "POZIFY_LLAMA_CPP_TIMEOUT"
 
 DEFAULT_PROVIDER = "hf_inference"
-DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+DEFAULT_MODEL = "Qwen/Qwen3-14B"
 DEFAULT_LLAMA_CPP_BASE_URL = "http://127.0.0.1:8080"
 LOCAL_TRANSFORMERS_PROVIDER = "local_transformers"
 LOCAL_TRANSFORMERS_ALIASES = {LOCAL_TRANSFORMERS_PROVIDER, "local", "transformers"}
@@ -250,11 +253,15 @@ class LocalTransformersCoachSummaryModel:
         max_tokens: int = 700,
         temperature: float = 0.1,
         token: str | None = None,
+        base_model: str | None = None,
+        adapter_id: str | None = None,
     ) -> None:
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.token = token
+        self.base_model = base_model
+        self.adapter_id = adapter_id
 
     def generate_summary(self, prompt: str) -> CoachSummaryGeneration:
         text = _generate_local_transformers_summary(
@@ -264,10 +271,13 @@ class LocalTransformersCoachSummaryModel:
             temperature=self.temperature,
             token=self.token,
         )
+        model_name = self.adapter_id or self.model
+        if self.base_model:
+            model_name = f"{model_name} (base: {self.base_model})"
         return CoachSummaryGeneration(
             text=text,
             provider=LOCAL_TRANSFORMERS_PROVIDER,
-            model=self.model,
+            model=model_name,
         )
 
 
@@ -344,6 +354,17 @@ class LlamaCppServerCoachSummaryModel:
 def get_coach_summary_model() -> CoachSummaryModel | None:
     load_local_env()
 
+    local_model_dir = os.getenv(LOCAL_MODEL_DIR_ENV)
+    if local_model_dir:
+        return LocalTransformersCoachSummaryModel(
+            model=local_model_dir,
+            max_tokens=_env_int(MAX_TOKENS_ENV, 700),
+            temperature=_env_float(TEMPERATURE_ENV, 0.1),
+            token=os.getenv(HF_TOKEN_ENV),
+            base_model=os.getenv(BASE_MODEL_ENV),
+            adapter_id=os.getenv(ADAPTER_ENV),
+        )
+
     provider = os.getenv(PROVIDER_ENV, DEFAULT_PROVIDER).strip().lower()
     if provider == "hf_inference":
         if env_truthy(os.getenv(DISABLE_REMOTE_ENV)):
@@ -374,5 +395,4 @@ def get_coach_summary_model() -> CoachSummaryModel | None:
 
     if env_truthy(os.getenv(DISABLE_REMOTE_ENV)):
         return None
-
     return None
