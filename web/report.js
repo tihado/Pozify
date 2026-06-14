@@ -3,7 +3,12 @@ import React, {
   useRef,
   useState,
 } from "https://esm.sh/react@18.2.0";
-import { formatValue, h, label, percent } from "./common.js?v=20260614-modular-app";
+import {
+  formatValue,
+  h,
+  label,
+  percent,
+} from "./common.js?v=20260614-modular-app";
 
 function ReviewInsights({ result }) {
   if (!result) return null;
@@ -114,18 +119,22 @@ function issuesForRep(report, repId) {
 }
 
 function topIssue(report) {
-  return [...issueList(report)].sort((a, b) => b.severity - a.severity)[0] || null;
+  return (
+    [...issueList(report)].sort((a, b) => b.severity - a.severity)[0] || null
+  );
 }
 
 function bestRep(report) {
   const analysisById = repAnalysisById(report);
-  return (report.reps?.reps || [])
-    .map((rep) => {
-      const score = repScore(analysisById.get(rep.rep_id));
-      return { rep, score };
-    })
-    .filter((entry) => entry.score !== null)
-    .sort((a, b) => b.score - a.score)[0] || null;
+  return (
+    (report.reps?.reps || [])
+      .map((rep) => {
+        const score = repScore(analysisById.get(rep.rep_id));
+        return { rep, score };
+      })
+      .filter((entry) => entry.score !== null)
+      .sort((a, b) => b.score - a.score)[0] || null
+  );
 }
 
 function reportDuration(report) {
@@ -165,20 +174,26 @@ function qualityVerdict(report) {
   if (adjusted >= 0.82) {
     return {
       title: issue ? "Strong set, one watchpoint" : "Clean training set",
-      detail: issue ? `${issueTitle(issue)} is the main limiter.` : "No clear form issue dominated the set.",
+      detail: issue
+        ? `${issueTitle(issue)} is the main limiter.`
+        : "No clear form issue dominated the set.",
       score: adjusted,
     };
   }
   if (adjusted >= 0.66) {
     return {
       title: "Usable reps, focused fix",
-      detail: issue ? `${issueTitle(issue)} should be fixed first.` : "Quality is workable, but keep reps controlled.",
+      detail: issue
+        ? `${issueTitle(issue)} should be fixed first.`
+        : "Quality is workable, but keep reps controlled.",
       score: adjusted,
     };
   }
   return {
     title: "Needs cleaner reps",
-    detail: issue ? `${issueTitle(issue)} is limiting this set.` : "Repeat with slower reps before progressing.",
+    detail: issue
+      ? `${issueTitle(issue)} is limiting this set.`
+      : "Repeat with slower reps before progressing.",
     score: adjusted,
   };
 }
@@ -216,7 +231,9 @@ function ScoreBar({ labelText, value, detail }) {
 
 function pointPath(points) {
   return points
-    .map(([x, y], index) => `${index ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`)
+    .map(
+      ([x, y], index) => `${index ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`,
+    )
     .join(" ");
 }
 
@@ -225,9 +242,7 @@ function pointList(points) {
 }
 
 function metricAverage(rows) {
-  const values = rows
-    .map((row) => row.value)
-    .filter((value) => value !== null);
+  const values = rows.map((row) => row.value).filter((value) => value !== null);
   if (!values.length) return null;
   return values.reduce((total, value) => total + value, 0) / values.length;
 }
@@ -252,7 +267,12 @@ function MetricRadar({ rows }) {
       row,
       x: center + Math.cos(angle) * (radius + 28),
       y: center + Math.sin(angle) * (radius + 28),
-      anchor: Math.cos(angle) > 0.25 ? "start" : Math.cos(angle) < -0.25 ? "end" : "middle",
+      anchor:
+        Math.cos(angle) > 0.25
+          ? "start"
+          : Math.cos(angle) < -0.25
+            ? "end"
+            : "middle",
     };
   });
   const average = metricAverage(rows);
@@ -352,7 +372,8 @@ function RepTrendChart({ reps, metricKey, labelText, className }) {
     .map((rep, index) => {
       const value = metricScore(rep[metricKey]);
       if (value === null) return null;
-      const x = pad + (reps.length <= 1 ? 0.5 : index / (reps.length - 1)) * innerWidth;
+      const x =
+        pad + (reps.length <= 1 ? 0.5 : index / (reps.length - 1)) * innerWidth;
       const y = pad + (1 - value) * innerHeight;
       return { rep, value, x, y };
     })
@@ -422,7 +443,12 @@ function RepTrendChart({ reps, metricKey, labelText, className }) {
       h("text", { className: "trend-axis-label", x: pad, y: height - 4 }, "R1"),
       h(
         "text",
-        { className: "trend-axis-label", x: width - pad, y: height - 4, textAnchor: "end" },
+        {
+          className: "trend-axis-label",
+          x: width - pad,
+          y: height - 4,
+          textAnchor: "end",
+        },
         reps.length ? `R${reps[reps.length - 1].rep_id}` : "R0",
       ),
     ),
@@ -453,7 +479,10 @@ function RepQualityStrip({ reps }) {
     ),
     h(
       "div",
-      { className: "rep-quality-strip", "aria-label": "Average quality by rep" },
+      {
+        className: "rep-quality-strip",
+        "aria-label": "Average quality by rep",
+      },
       scores.map(({ rep, score }) =>
         h(
           "div",
@@ -464,7 +493,10 @@ function RepQualityStrip({ reps }) {
           },
           h("span", {
             style: {
-              height: score === null ? "8%" : `${Math.max(8, Math.round(score * 100))}%`,
+              height:
+                score === null
+                  ? "8%"
+                  : `${Math.max(8, Math.round(score * 100))}%`,
             },
             "aria-hidden": "true",
           }),
@@ -496,9 +528,7 @@ function CoachOverview({ result }) {
   );
   const isFallback = coachSource.startsWith("fallback");
   const cueNow =
-    summary.top_fixes?.[0] ||
-    summary.next_session_plan?.[0] ||
-    summary.summary;
+    summary.top_fixes?.[0] || summary.next_session_plan?.[0] || summary.summary;
 
   return h(
     "section",
@@ -530,21 +560,26 @@ function CoachOverview({ result }) {
                 "A conservative fallback summary was used because the generated summary was unavailable or did not pass verification.",
               )
             : null,
-          verifierBypassed
-            ? h(
-                "p",
-                { className: "system-note warning" },
-                "Verifier is disabled, so the coach summary is shown without automated verification.",
-              )
-            : null,
         )
       : null,
     h(
       "div",
       { className: "coach-overview-grid" },
-      h(NoteList, { title: "Fix first", items: summary.top_fixes, className: "coach-note priority" }),
-      h(NoteList, { title: "Next session", items: summary.next_session_plan, className: "coach-note next" }),
-      h(NoteList, { title: "Keep", items: summary.what_looked_good, className: "coach-note" }),
+      h(NoteList, {
+        title: "Fix first",
+        items: summary.top_fixes,
+        className: "coach-note priority",
+      }),
+      h(NoteList, {
+        title: "Next session",
+        items: summary.next_session_plan,
+        className: "coach-note next",
+      }),
+      h(NoteList, {
+        title: "Keep",
+        items: summary.what_looked_good,
+        className: "coach-note",
+      }),
       h(NoteList, {
         title: "Variation vs issue",
         items: summary.valid_variation_vs_issue,
@@ -572,7 +607,11 @@ function RepTimeline({
   const isPlayback = typeof onRepSelect === "function";
   const playheadLeft = `${Math.max(0, Math.min(100, (playbackTime / duration) * 100))}%`;
   if (!reps.length) {
-    return h("p", { className: "empty-copy" }, "No complete reps were detected.");
+    return h(
+      "p",
+      { className: "empty-copy" },
+      "No complete reps were detected.",
+    );
   }
 
   return h(
@@ -614,7 +653,8 @@ function RepTimeline({
         if (isPlayback) {
           segmentProps.type = "button";
           segmentProps.onClick = () => onRepSelect(rep);
-          segmentProps["aria-label"] = `Play from rep ${rep.rep_id}, ${timeRange(rep.start_sec, rep.end_sec)}`;
+          segmentProps["aria-label"] =
+            `Play from rep ${rep.rep_id}, ${timeRange(rep.start_sec, rep.end_sec)}`;
           segmentProps["aria-pressed"] = activeRepId === rep.rep_id;
         }
         return h(
@@ -663,7 +703,8 @@ function SummaryTab({ result }) {
     (issue
       ? issueEvidence(issue)
       : "Repeat the next set with the same controlled tempo.");
-  const nextSession = summary.next_session_plan?.[0] || "Repeat the set with controlled reps.";
+  const nextSession =
+    summary.next_session_plan?.[0] || "Repeat the set with controlled reps.";
 
   return h(
     "section",
@@ -688,7 +729,9 @@ function SummaryTab({ result }) {
               : "no clear issue",
             issues.length ? severityLevel(issue) : "strong",
           ),
-          metaChip(provider === "local_transformers" ? "local coach" : provider),
+          metaChip(
+            provider === "local_transformers" ? "local coach" : provider,
+          ),
         ),
       ),
       h(
@@ -749,8 +792,14 @@ function SummaryTab({ result }) {
       "div",
       { className: "note-grid report-notes" },
       h(NoteList, { title: "What you did", items: summary.what_you_did }),
-      h(NoteList, { title: "What looked good", items: summary.what_looked_good }),
-      h(NoteList, { title: "What changed", items: summary.what_changed_across_reps }),
+      h(NoteList, {
+        title: "What looked good",
+        items: summary.what_looked_good,
+      }),
+      h(NoteList, {
+        title: "What changed",
+        items: summary.what_changed_across_reps,
+      }),
     ),
     warnings.length
       ? h(
@@ -786,7 +835,11 @@ function MetricsTab({ result }) {
     "section",
     { className: "summary metrics-panel" },
     h("h2", null, "Movement metrics"),
-    h("p", null, "Charts show which qualities shaped the coach note and where the set started to drift."),
+    h(
+      "p",
+      null,
+      "Charts show which qualities shaped the coach note and where the set started to drift.",
+    ),
     h(
       "div",
       { className: "metric-chart-hero" },
@@ -802,7 +855,11 @@ function MetricsTab({ result }) {
                 value: row.value,
               }),
             )
-          : h("p", { className: "empty-copy" }, "No aggregate scores available."),
+          : h(
+              "p",
+              { className: "empty-copy" },
+              "No aggregate scores available.",
+            ),
       ),
     ),
     trendSpecs.length
@@ -864,14 +921,24 @@ function MetricsTab({ result }) {
   );
 }
 
-function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) {
+function RepDetailPanel({
+  report,
+  rep,
+  result,
+  playbackTime,
+  compact = false,
+}) {
   if (!rep) {
     return h(
       "aside",
       { className: `rep-detail-panel${compact ? " compact" : ""}` },
       h("span", { className: "rep-detail-kicker" }, "Current rep"),
       h("strong", null, "No rep selected"),
-      h("p", null, "Play the video or click a rep segment to inspect its metrics."),
+      h(
+        "p",
+        null,
+        "Play the video or click a rep segment to inspect its metrics.",
+      ),
     );
   }
 
@@ -879,8 +946,14 @@ function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) 
   const repIssues = issuesForRep(report, rep.rep_id);
   const score = repScore(analysis);
   const duration = Math.max(0, (rep.end_sec || 0) - (rep.start_sec || 0));
-  const firstHalfDuration = Math.max(0, (rep.mid_sec || 0) - (rep.start_sec || 0));
-  const secondHalfDuration = Math.max(0, (rep.end_sec || 0) - (rep.mid_sec || 0));
+  const firstHalfDuration = Math.max(
+    0,
+    (rep.mid_sec || 0) - (rep.start_sec || 0),
+  );
+  const secondHalfDuration = Math.max(
+    0,
+    (rep.end_sec || 0) - (rep.mid_sec || 0),
+  );
   const metricRows = [
     { name: "ROM", value: metricScore(analysis?.range_of_motion_score) },
     { name: "Stability", value: metricScore(analysis?.stability_score) },
@@ -931,7 +1004,10 @@ function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) 
           h("strong", null, `Rep ${rep.rep_id}`),
           h("small", null, timeRange(rep.start_sec, rep.end_sec)),
         ),
-        metaChip(score === null ? "no score" : percent(score), scoreTone(score)),
+        metaChip(
+          score === null ? "no score" : percent(score),
+          scoreTone(score),
+        ),
       ),
       h(
         "div",
@@ -946,7 +1022,13 @@ function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) 
           "div",
           { className: "rep-fact" },
           h("span", null, "Focus"),
-          h("strong", null, weakestMetric ? `${weakestMetric.name} ${percent(weakestMetric.value)}` : "n/a"),
+          h(
+            "strong",
+            null,
+            weakestMetric
+              ? `${weakestMetric.name} ${percent(weakestMetric.value)}`
+              : "n/a",
+          ),
         ),
         h(
           "div",
@@ -958,7 +1040,11 @@ function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) 
           "div",
           { className: "rep-fact" },
           h("span", null, "Issues"),
-          h("strong", null, repIssues.length ? String(repIssues.length) : "clear"),
+          h(
+            "strong",
+            null,
+            repIssues.length ? String(repIssues.length) : "clear",
+          ),
         ),
       ),
       h(
@@ -1012,7 +1098,11 @@ function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) 
               { className: "rep-issue-meta" },
               h("span", null, issueFocus(primaryIssue)),
               h("span", null, issueClipText(result, primaryIssue, 0)),
-              h("span", null, `confidence ${percent(primaryIssue.evidence?.confidence)}`),
+              h(
+                "span",
+                null,
+                `confidence ${percent(primaryIssue.evidence?.confidence)}`,
+              ),
               repIssues.length > 1
                 ? h("span", null, `+${repIssues.length - 1} more`)
                 : null,
@@ -1056,7 +1146,11 @@ function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) 
         "div",
         { className: "rep-fact" },
         h("span", null, "Tempo split"),
-        h("strong", null, `${firstHalfDuration.toFixed(2)}/${secondHalfDuration.toFixed(2)}s`),
+        h(
+          "strong",
+          null,
+          `${firstHalfDuration.toFixed(2)}/${secondHalfDuration.toFixed(2)}s`,
+        ),
       ),
       h(
         "div",
@@ -1068,13 +1162,23 @@ function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) 
         "div",
         { className: "rep-fact" },
         h("span", null, "Focus"),
-        h("strong", null, weakestMetric ? `${weakestMetric.name} ${percent(weakestMetric.value)}` : "n/a"),
+        h(
+          "strong",
+          null,
+          weakestMetric
+            ? `${weakestMetric.name} ${percent(weakestMetric.value)}`
+            : "n/a",
+        ),
       ),
       h(
         "div",
         { className: "rep-fact" },
         h("span", null, "Issues"),
-        h("strong", null, repIssues.length ? String(repIssues.length) : "clear"),
+        h(
+          "strong",
+          null,
+          repIssues.length ? String(repIssues.length) : "clear",
+        ),
       ),
     ),
     h(
@@ -1134,7 +1238,10 @@ function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) 
         ? repIssues.map((issue, index) =>
             h(
               "article",
-              { className: `issue-mini ${severityLevel(issue)}`, key: `${issue.issue}-${index}` },
+              {
+                className: `issue-mini ${severityLevel(issue)}`,
+                key: `${issue.issue}-${index}`,
+              },
               h(
                 "div",
                 { className: "issue-mini-head" },
@@ -1150,7 +1257,11 @@ function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) 
                 "div",
                 { className: "timeline-meta" },
                 h("span", null, issueClipText(result, issue, index)),
-                h("span", null, `evidence ${percent(issue.evidence?.confidence)}`),
+                h(
+                  "span",
+                  null,
+                  `evidence ${percent(issue.evidence?.confidence)}`,
+                ),
               ),
             ),
           )
@@ -1217,7 +1328,11 @@ function ReplayReviewPanel({ result, videoSrc, className = "" }) {
               "div",
               { className: "timeline-video-placeholder" },
               h("strong", null, "No replay video available"),
-              h("span", null, "Upload a clip or use a run with an annotated video to sync the timeline."),
+              h(
+                "span",
+                null,
+                "Upload a clip or use a run with an annotated video to sync the timeline.",
+              ),
             ),
       ),
       h(RepDetailPanel, {
@@ -1277,7 +1392,10 @@ function RepsTab({ result }) {
                 "div",
                 { className: "rep-card-head" },
                 h("strong", null, `Rep ${rep.rep_id}`),
-                metaChip(score === null ? "no score" : percent(score), scoreTone(score)),
+                metaChip(
+                  score === null ? "no score" : percent(score),
+                  scoreTone(score),
+                ),
               ),
               h("span", null, timeRange(rep.start_sec, rep.end_sec)),
               h("span", null, `frames ${rep.start_frame}-${rep.end_frame}`),
@@ -1287,7 +1405,11 @@ function RepsTab({ result }) {
                 { className: "pill-row compact" },
                 repIssues.length
                   ? repIssues.map((issue, index) =>
-                      metaChip(issueTitle(issue), `${severityLevel(issue)}`, `${issue.issue}-${index}`),
+                      metaChip(
+                        issueTitle(issue),
+                        `${severityLevel(issue)}`,
+                        `${issue.issue}-${index}`,
+                      ),
                     )
                   : metaChip("no issue marker", "strong"),
               ),
