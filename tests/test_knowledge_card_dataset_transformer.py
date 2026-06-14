@@ -10,8 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify.knowledge_card_dataset_transformer import (
     load_dataset_rows,
+    normalize_dataset_rows,
     transform_dataset_rows,
     write_card_pack,
+    write_normalized_exercises,
 )
 
 
@@ -66,6 +68,24 @@ class KnowledgeCardDatasetTransformerTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["name"], "Squat")
 
+    def test_normalize_dataset_rows_writes_intermediate_schema(self) -> None:
+        exercises = normalize_dataset_rows(
+            [
+                {
+                    "Exercise_Name": "Air Squat",
+                    "Equipment": ["Bodyweight"],
+                    "Target Muscle": ["Quadriceps", "Glutes"],
+                    "Instructions": "Stand tall.\nSit down.\nStand up.",
+                }
+            ],
+            source_dataset="demo/normalized",
+        )
+
+        self.assertEqual(len(exercises), 1)
+        self.assertEqual(exercises[0]["exercise_label"], "squat")
+        self.assertEqual(exercises[0]["equipment"], ["Bodyweight"])
+        self.assertEqual(exercises[0]["primary_muscles"], ["Quadriceps", "Glutes"])
+
     def test_write_card_pack_writes_transform_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "dataset.json"
@@ -99,6 +119,33 @@ class KnowledgeCardDatasetTransformerTests(unittest.TestCase):
             written["cards"][0]["coaching_points"],
             ["Press the weights overhead.", "Lower with control."],
         )
+
+    def test_write_normalized_exercises_writes_json_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "dataset.json"
+            output_path = Path(temp_dir) / "normalized.json"
+            input_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "name": "Push Up",
+                            "equipment": ["Bodyweight"],
+                            "primary_muscles": ["Chest"],
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            payload = write_normalized_exercises(
+                input_path=input_path,
+                output_path=output_path,
+                source_dataset="demo/normalized-write",
+            )
+            written = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["exercise_count"], 1)
+        self.assertEqual(written["exercises"][0]["exercise_label"], "push_up")
 
 
 if __name__ == "__main__":
