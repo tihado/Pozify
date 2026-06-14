@@ -56,7 +56,7 @@ class _GoodModel:
                 '"confidence_notes":["Confidence is limited."]}'
             ),
             provider="hf_inference",
-            model="Qwen/Qwen2.5-7B-Instruct",
+            model="Qwen/Qwen3-14B",
         )
 
 
@@ -159,7 +159,7 @@ class CoachSummaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             env_path = Path(temp_dir) / ".env"
             env_path.write_text(
-                "HF_TOKEN=test-token\nPOZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen2.5-7B-Instruct\n",
+                "HF_TOKEN=test-token\nPOZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B\n",
                 encoding="utf-8",
             )
             with patch.dict(os.environ, {}, clear=True):
@@ -173,7 +173,7 @@ class CoachSummaryTests(unittest.TestCase):
                 self.assertEqual(os.getenv("HF_TOKEN"), "test-token")
                 self.assertEqual(
                     os.getenv("POZIFY_COACH_SUMMARY_MODEL"),
-                    "Qwen/Qwen2.5-7B-Instruct",
+                    "Qwen/Qwen3-14B",
                 )
 
     def test_get_coach_summary_model_can_use_local_transformers_provider(self) -> None:
@@ -414,7 +414,7 @@ class CoachSummaryTests(unittest.TestCase):
         )
 
         self.assertEqual(result.provider, "hf_inference")
-        self.assertEqual(result.model, "Qwen/Qwen2.5-7B-Instruct")
+        self.assertEqual(result.model, "Qwen/Qwen3-14B")
         self.assertEqual(result.source, "model_or_local")
 
     def test_verifier_rejects_issue_not_in_json(self) -> None:

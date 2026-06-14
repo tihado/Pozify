@@ -13,7 +13,9 @@ It follows the same stage pattern as the exercise-router Modal pipeline:
 - `prepare-data`
 - `train`
 - `evaluate`
+- `merge`
 - `publish`
+- `publish-merged`
 - `all`
 
 ## Requirements
@@ -29,9 +31,11 @@ modal setup
 
 - `HF_TOKEN`
 - optional `POZIFY_COACH_SUMMARY_HF_REPO_ID`
+- optional `POZIFY_COACH_SUMMARY_MERGED_HF_REPO_ID`
+- recommended `POZIFY_COACH_SUMMARY_MODEL`
 - optional `POZIFY_COACH_SUMMARY_HF_PRIVATE=1`
 
-The script uses `modal.Secret.from_dotenv()`, so for local `modal run ...` usage you do not need to pre-create a hosted Modal secret just to run `prepare-data` or `train`.
+The script reads your local `.env` and injects those values into a Modal secret at runtime, so for local `modal run ...` usage you do not need to pre-create a hosted Modal secret just to run `prepare-data`, `train`, or `publish`.
 
 If you prefer a hosted secret for team/shared environments, you can still create one manually in Modal and adapt the script later.
 
@@ -72,6 +76,32 @@ Publish the adapter and metadata to Hugging Face:
 modal run scripts/coach_summary_modal.py --stage publish --repo-id build-small-hackathon/pozify-coach-summary
 ```
 
+Merge the LoRA adapter into a full Transformers checkpoint:
+
+```bash
+modal run scripts/coach_summary_modal.py --stage merge
+```
+
+Publish the merged inference-ready model to Hugging Face:
+
+```bash
+modal run scripts/coach_summary_modal.py --stage publish-merged --repo-id build-small-hackathon/pozify-coach-summary
+```
+
+If your Hugging Face token does not have permission to create or write under an organization
+namespace, publish to a personal repo instead:
+
+```bash
+modal run scripts/coach_summary_modal.py --stage publish-merged --repo-id <your-username>/pozify-coach-summary
+```
+
+You can also set this once in `.env`:
+
+```bash
+POZIFY_COACH_SUMMARY_MODEL=<your-username>/pozify-coach-summary
+POZIFY_COACH_SUMMARY_MERGED_HF_REPO_ID=<your-username>/pozify-coach-summary
+```
+
 Run the full pipeline end to end:
 
 ```bash
@@ -83,22 +113,27 @@ modal run scripts/coach_summary_modal.py --stage all --epochs 2 --style-weight 0
 The Modal model volume stores:
 
 - `adapter/`
+- `merged_model/`
 - `training_config.json`
 - `training_summary.json`
 - `evaluation.json`
 - `hf_upload.json`
+- `merge_summary.json`
+- `hf_merged_upload.json`
 - `README.md`
 
 ## Runtime Usage
 
-After publish, point Pozify runtime to the trained adapter by setting:
+For cloud inference in the current Pozify app, point runtime to the merged full model repo:
 
 ```bash
-export POZIFY_COACH_SUMMARY_ADAPTER_ID=build-small-hackathon/pozify-coach-summary
+export POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary
 ```
 
-If you download the adapter locally instead, use:
+`POZIFY_COACH_SUMMARY_ADAPTER_ID` is no longer used as the remote inference target. Keep it only for adapter-centric workflows such as local merge/evaluation.
+
+If you download the merged model locally instead, use:
 
 ```bash
-export POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR=/path/to/adapter
+export POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR=/path/to/merged_model
 ```

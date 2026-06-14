@@ -359,7 +359,7 @@ class PipelineContractTests(unittest.TestCase):
                 return_value=CoachSummaryResult(
                     summary=model_summary,
                     provider="hf_inference",
-                    model="Qwen/Qwen2.5-7B-Instruct",
+                    model="Qwen/Qwen3-14B",
                     source="model_or_local",
                 ),
             ),
@@ -389,7 +389,7 @@ class PipelineContractTests(unittest.TestCase):
         self.assertEqual(report["artifacts"]["coach_summary_provider"], "hf_inference")
         self.assertEqual(
             report["artifacts"]["coach_summary_model"],
-            "Qwen/Qwen2.5-7B-Instruct",
+            "Qwen/Qwen3-14B",
         )
         self.assertTrue(report["artifacts"]["coach_summary_verifier_bypassed"])
         self.assertFalse(report["verification"]["passed"])
