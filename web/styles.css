@@ -1298,7 +1298,7 @@ input[type="text"]:focus-visible,
 }
 
 .review-output-replay .rep-detail-panel {
-  max-height: min(52vh, 620px);
+  max-height: min(54.6vh, 546px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -2546,7 +2546,7 @@ td {
   }
 
   .review-output-replay .rep-detail-panel {
-    max-height: min(70vh, 620px);
+    max-height: min(54.6vh, 546px);
     overflow-y: auto;
   }
 
