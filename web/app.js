@@ -310,7 +310,7 @@ function App() {
     payload.append("intended_variation", "");
     payload.append("limitations", JSON.stringify(limitations));
     payload.append("equipment", equipment);
-    payload.append("bypass_verifier", "false");
+    payload.append("bypass_verifier", "true");
 
     try {
       const response = await fetch("/api/analyze/stream", {

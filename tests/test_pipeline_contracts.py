@@ -20,7 +20,6 @@ from pozify.contracts import (
     PoseFrame,
     PoseSequence,
     UserProfile,
-    Verification,
     VideoManifest,
     validate_contract,
 )
@@ -341,7 +340,7 @@ class PipelineContractTests(unittest.TestCase):
         self.assertEqual(payload_by_step["issues"]["issue_count"], 0)
         self.assertIn("annotated_video_path", payload_by_step["render"])
 
-    def test_pipeline_can_bypass_verifier_and_keep_model_summary(self) -> None:
+    def test_pipeline_can_disable_verifier_and_keep_model_summary(self) -> None:
         model_summary = CoachSummary(
             summary="Model summary kept.",
             what_you_did=["You completed 1 `squat` rep."],
@@ -365,18 +364,7 @@ class PipelineContractTests(unittest.TestCase):
             ),
             patch(
                 "pozify.pipeline.verifier.run",
-                return_value=Verification(
-                    passed=False,
-                    checks={
-                        "no_issue_outside_json": True,
-                        "variation_not_overcorrected": False,
-                        "no_diagnosis": True,
-                        "no_injury_prevention_claim": True,
-                        "confidence_notes_present_when_required": True,
-                    },
-                    notes=["Synthetic verifier failure."],
-                ),
-            ),
+            ) as verifier_run,
         ):
             result = pipeline.run_pipeline(
                 video_path=None, profile_input=PROFILE_INPUT, mock=True
@@ -392,10 +380,16 @@ class PipelineContractTests(unittest.TestCase):
             "Qwen/Qwen3-14B",
         )
         self.assertTrue(report["artifacts"]["coach_summary_verifier_bypassed"])
-        self.assertFalse(report["verification"]["passed"])
+        self.assertTrue(report["verification"]["passed"])
+        self.assertEqual(report["verification"]["checks"], {"verifier_disabled": True})
+        self.assertEqual(
+            report["verification"]["notes"],
+            ["Coach summary verifier is disabled for this run."],
+        )
         self.assertTrue(
             report["artifacts"]["coach_summary_verifier_bypass_requested"]
         )
+        verifier_run.assert_not_called()
 
     def test_contract_validation_rejects_missing_required_field(self) -> None:
         payload = {

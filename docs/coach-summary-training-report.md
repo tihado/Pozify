@@ -235,9 +235,10 @@ At runtime the pipeline does this:
 
 1. Generate a model summary from structured evidence.
 2. Parse the model output into `coach_summary.json`.
-3. Run the verifier.
-4. If generation fails, use `fallback_initial`.
-5. If generation succeeds but verification fails, use `fallback_after_verification` unless bypass is enabled.
+3. Skip the verifier by default and write a `verification.json` artifact marked as disabled.
+4. If verifier bypass is explicitly disabled, run the verifier.
+5. If generation fails, use `fallback_initial`.
+6. If generation succeeds but verification fails, use `fallback_after_verification`.
 
 The final report stores:
 

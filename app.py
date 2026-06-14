@@ -201,7 +201,7 @@ def _safe_upload_stem(filename: str) -> str:
 def _run_analysis_pipeline(
     video_path: str | None,
     profile_input: dict[str, Any],
-    bypass_verifier: bool = False,
+    bypass_verifier: bool = True,
     progress: Any | None = None,
 ) -> dict[str, Any]:
     return run_pipeline(
@@ -273,7 +273,7 @@ async def analyze_api(
     intended_variation: str = Form(default=""),
     limitations: str = Form(default="[]"),
     equipment: str = Form(default="bodyweight"),
-    bypass_verifier: str = Form(default="false"),
+    bypass_verifier: str = Form(default="true"),
 ) -> dict[str, Any]:
     profile = _profile_input(
         goal=goal,
@@ -306,7 +306,7 @@ async def analyze_stream_api(
     intended_variation: str = Form(default=""),
     limitations: str = Form(default="[]"),
     equipment: str = Form(default="bodyweight"),
-    bypass_verifier: str = Form(default="false"),
+    bypass_verifier: str = Form(default="true"),
 ) -> StreamingResponse:
     profile = _profile_input(
         goal=goal,

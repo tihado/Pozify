@@ -352,7 +352,9 @@ Each run creates `runs/<run_id>/` with:
 - `final_report.json`
 
 JSON artifacts are validated before they are written. The final report records the analysis mode,
-pose source, coach provider, coach model, verifier status, and downloadable artifact URLs.
+pose source, coach provider, coach model, verifier status, and downloadable artifact URLs. The
+coach-summary verifier is disabled by default; set `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER=0` or pass
+`bypass_verifier=false` to run it.
 
 ## Project Structure
 

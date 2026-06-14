@@ -537,7 +537,7 @@ function CoachOverview({ result }) {
             ? h(
                 "p",
                 { className: "system-note warning" },
-                "Verifier bypass is active, so the model summary is shown even though verification did not pass.",
+                "Verifier is disabled, so the coach summary is shown without automated verification.",
               )
             : null,
         )

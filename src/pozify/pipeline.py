@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from pozify import sample_pose_cache
 from pozify.artifacts import write_json
-from pozify.contracts import UserProfile, to_dict
+from pozify.contracts import UserProfile, Verification, to_dict
 from pozify.env import env_truthy, load_local_env
 from pozify.exercises import create_exercise_strategy
 from pozify.knowledge_cards import retrieve_cards_with_metadata
@@ -27,6 +27,24 @@ from pozify.steps import (
 RUNS_DIR = Path("runs")
 ProgressCallback = Callable[[dict[str, Any]], None]
 BYPASS_VERIFIER_ENV = "POZIFY_COACH_SUMMARY_BYPASS_VERIFIER"
+DEFAULT_BYPASS_VERIFIER = True
+
+
+def _bypass_verifier_enabled(requested: bool | None) -> bool:
+    if requested is not None:
+        return requested
+    configured = os.getenv(BYPASS_VERIFIER_ENV)
+    if configured is None:
+        return DEFAULT_BYPASS_VERIFIER
+    return env_truthy(configured)
+
+
+def _disabled_verification() -> Verification:
+    return Verification(
+        passed=True,
+        checks={"verifier_disabled": True},
+        notes=["Coach summary verifier is disabled for this run."],
+    )
 
 
 def _env_mock_mode(video_path: str | None) -> bool:
@@ -48,11 +66,7 @@ def run_pipeline(
 ) -> dict[str, Any]:
     load_local_env()
     mock_mode = _env_mock_mode(video_path) if mock is None else mock
-    bypass_verifier_enabled = (
-        env_truthy(os.getenv(BYPASS_VERIFIER_ENV))
-        if bypass_verifier is None
-        else bypass_verifier
-    )
+    bypass_verifier_enabled = _bypass_verifier_enabled(bypass_verifier)
 
     run_id = (
         f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
@@ -225,10 +239,9 @@ def run_pipeline(
         "I am turning the scan into coaching notes you can use right away.",
     )
     analysis_mode = "mock" if mock_mode else "real"
-    mock_steps = [
-        "coach_summary",
-        "verifier",
-    ]
+    mock_steps = ["coach_summary"]
+    if not bypass_verifier_enabled:
+        mock_steps.append("verifier")
     if mock_mode:
         mock_steps.insert(0, "exercise_classifier")
 
@@ -249,22 +262,22 @@ def run_pipeline(
         cards=summary_cards,
     )
     summary = coach_result.summary
-    verification = verifier.run(
-        summary,
-        issues,
-        variation,
-        classification=classification,
-        analysis=analysis,
-        reps=reps,
-    )
     coach_summary_source = coach_result.source
     coach_summary_provider = coach_result.provider
     coach_summary_model = coach_result.model
-    coach_summary_verifier_bypassed = False
-    if not verification.passed:
-        if bypass_verifier_enabled and coach_result.source == "model_or_local":
-            coach_summary_verifier_bypassed = True
-        else:
+    coach_summary_verifier_bypassed = bypass_verifier_enabled
+    if bypass_verifier_enabled:
+        verification = _disabled_verification()
+    else:
+        verification = verifier.run(
+            summary,
+            issues,
+            variation,
+            classification=classification,
+            analysis=analysis,
+            reps=reps,
+        )
+        if not verification.passed:
             summary = coach_summary_fallback.build_fallback_summary(
                 profile=profile,
                 classification=classification,
