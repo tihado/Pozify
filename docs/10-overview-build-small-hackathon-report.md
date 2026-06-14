@@ -1,5 +1,13 @@
 # Pozify Build Small Hackathon Report
 
+Status note:
+
+- This report is kept as the hackathon narrative document.
+- Current runtime defaults have moved to `Qwen/Qwen3-14B`.
+- Current coach-summary training now includes a LoRA/merge/publish pipeline on Modal.
+- For the current operational commands, prefer [../README.md](../README.md) and
+  [30-coach-modal-training.md](30-coach-modal-training.md).
+
 Date: June 14, 2026
 
 Pozify is a small-model workout form reviewer. A user uploads a short exercise video, adds basic
@@ -49,11 +57,12 @@ pretending every video is one of the supported movements.
 | Pose extractor | MediaPipe Pose Landmarker Lite | Fast, practical feature extractor for a Gradio Space. |
 | Exercise router | Custom PyTorch BiLSTM | Tiny trainable temporal model over pose windows. |
 | Baseline router | scikit-learn HistGradientBoostingClassifier | Strong baseline over engineered vectors and fallback artifact. |
-| Coach summary | Qwen2.5-7B-Instruct | Small enough for the hackathon cap, strong at structured JSON explanation. |
-| llama.cpp path | Qwen2.5 Instruct GGUF via `llama-server` | Local-first/off-grid coach summary path with GPU offload. |
+| Coach summary | Qwen/Qwen3-14B | Current default cloud runtime for structured JSON explanation. |
+| llama.cpp path | Qwen3-14B Instruct GGUF via `llama-server` | Local-first/off-grid coach summary path with GPU offload. |
 
-The project did not fine-tune Qwen. Instead, Qwen is used as a grounded summarizer over JSON
-evidence, and the trained part of the project is the exercise router.
+The original hackathon build trained the exercise router first and used Qwen as a grounded
+summarizer over JSON evidence. The current codebase now also contains a coach-summary LoRA / merged
+model training path on Modal.
 
 ## What Was Trained
 
@@ -203,7 +212,7 @@ logic stay outside the GPU worker. Useful settings:
 
 ```bash
 POZIFY_COACH_SUMMARY_PROVIDER=local_transformers
-POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen2.5-7B-Instruct
+POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
 POZIFY_SPACES_GPU_DURATION=300
 ```
 
@@ -218,7 +227,7 @@ Start llama.cpp with a local GGUF:
 
 ```bash
 llama-server \
-  --model /path/to/qwen2.5-7b-instruct-q4_k_m.gguf \
+  --model /path/to/qwen3-14b-instruct-q4_k_m.gguf \
   --ctx-size 4096 \
   --n-gpu-layers 99 \
   --host 127.0.0.1 \
@@ -229,7 +238,7 @@ Or use a Hugging Face GGUF repo:
 
 ```bash
 llama-server \
-  --hf-repo owner/qwen2.5-7b-instruct-gguf:Q4_K_M \
+  --hf-repo owner/qwen3-14b-instruct-gguf:Q4_K_M \
   --ctx-size 4096 \
   --n-gpu-layers 99 \
   --host 127.0.0.1 \
@@ -240,7 +249,7 @@ Then point Pozify at it:
 
 ```bash
 POZIFY_COACH_SUMMARY_PROVIDER=llama_cpp \
-POZIFY_COACH_SUMMARY_MODEL=local-qwen2.5-7b-gguf \
+POZIFY_COACH_SUMMARY_MODEL=local-qwen3-14b-gguf \
 POZIFY_LLAMA_CPP_BASE_URL=http://127.0.0.1:8080 \
 uv run python app.py
 ```

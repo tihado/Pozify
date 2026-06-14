@@ -55,13 +55,13 @@ image = (
     )
     .add_local_dir("src", "/root/src", copy=True)
     .add_local_file(
-        "docs/huggingface-router-model-card.md",
-        "/root/docs/huggingface-router-model-card.md",
+        "docs/22-router-huggingface-model-card.md",
+        "/root/docs/22-router-huggingface-model-card.md",
         copy=True,
     )
     .add_local_file(
-        "docs/exercise-router-training-report.md",
-        "/root/docs/exercise-router-training-report.md",
+        "docs/20-router-training-report.md",
+        "/root/docs/20-router-training-report.md",
         copy=True,
     )
 )

@@ -1,5 +1,10 @@
 # Pozify Implementation Plan
 
+Status: historical implementation plan.
+
+Use [../README.md](../README.md) and [01-docs-index.md](01-docs-index.md) for the current runtime
+workflow and operational commands.
+
 This plan breaks Pozify into implementation workstreams that can be developed independently while preserving the current JSON data contracts.
 
 ## Phase 1: Foundation And Contracts

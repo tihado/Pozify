@@ -1,6 +1,6 @@
 ---
 title: Pozify
-emoji: 🏋️
+emoji: "🏋️"
 colorFrom: green
 colorTo: blue
 sdk: gradio
@@ -20,38 +20,53 @@ tags:
 
 # Pozify
 
-Pozify is a Gradio Space that turns a short workout clip into a structured form-review report:
-exercise detected, reps counted, issues localized by timestamp, an annotated video, and grounded
-coach feedback.
+Pozify turns a short workout video into a structured form-review report:
 
-The project was built for the
-[Hugging Face Build Small Hackathon](https://huggingface.co/build-small-hackathon). It uses small,
-replaceable models instead of a giant end-to-end model: pose extraction, a tiny trained exercise
-router, rule-based rep and issue analysis, and a small instruction model for the final explanation.
+- exercise detected
+- reps counted
+- variation and issue markers
+- annotated video and clips
+- grounded coach summary
+- verifier-backed confidence and safety notes
 
-## Hackathon Fit
+The app is built as a small-model pipeline, not a giant end-to-end model. It combines transparent
+pose analysis, a trained exercise router, exercise-specific rule logic, deterministic knowledge-card
+retrieval, and a small summary model.
 
-| Requirement or badge | Pozify status |
-| -------------------- | ------------- |
-| Gradio app on HF Space | Uses `gr.Server` with a custom static frontend and FastAPI routes in `app.py`. |
-| Small models only | Main coach model is Qwen2.5-7B Instruct; trained router has 182,796 params. Total is far below the 32B cap. |
-| Well-Tuned | The exercise router was trained on pose-window data and published as `build-small-hackathon/pozify-exercise-router`. |
-| Modal-powered | Dataset ingestion, pose feature extraction, training, evaluation, and Hub publishing run on Modal. |
-| Llama Champion | Coach summary can run through `llama-server` with `POZIFY_COACH_SUMMARY_PROVIDER=llama_cpp`. |
-| Field Notes | See [docs/build-small-hackathon-report.md](docs/build-small-hackathon-report.md). |
-| Off-Brand | The app uses a custom frontend under `web/`, not the default Gradio blocks layout. |
+Pozify is not a medical device. It does not diagnose injuries, claim injury prevention, or replace a
+qualified trainer, clinician, or physical therapist.
 
-## What It Does
+## Current Status
+
+The current codebase supports:
+
+- web app runtime through `app.py`
+- trained exercise routing for `squat`, `push_up`, `shoulder_press`, and `unknown`
+- grounded coach-summary generation from structured JSON artifacts
+- verifier and conservative fallback summaries
+- Modal training pipelines for both the exercise router and coach-summary model
+
+The current safest cloud runtime for coach summary is:
+
+- `Qwen/Qwen3-14B`
+
+The current fine-tuned coach-summary Hugging Face repo can be trained, merged, and published, but
+it is not yet cleanly usable through the current Hugging Face serverless `chat_completion` path.
+If you want to use that fine-tuned model today, the simplest path is local merged-model inference
+through `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`.
+
+## Product Flow
 
 ```text
-user profile + input video
--> video quality check
--> MediaPipe pose landmarks
--> pose cleaning and normalization
--> trained exercise router
+video + user profile
+-> video QC
+-> MediaPipe pose extraction
+-> pose cleaning
+-> exercise router
 -> exercise-specific rep counter
--> per-rep metrics and variation detection
--> frame-level issue markers
+-> per-rep analysis
+-> variation detection
+-> issue markers
 -> annotated video renderer
 -> grounded coach summary
 -> verifier
@@ -65,117 +80,32 @@ Supported router labels:
 - `shoulder_press`
 - `unknown`
 
-Pozify is not a medical device. It does not diagnose injuries, claim injury prevention, or replace a
-trainer, clinician, or physical therapist.
-
 ## Model Stack
 
 | Component | Model or method | Trained here? | Runtime |
-| --------- | --------------- | ------------- | ------- |
-| Pose extraction | MediaPipe Pose Landmarker Lite | No | CPU, MediaPipe Tasks GPU delegate when available |
-| Exercise router | PyTorch BiLSTM over 30-frame pose windows | Yes | Torch CPU/CUDA, HF ZeroGPU wrapped |
+| --- | --- | --- | --- |
+| Pose extraction | MediaPipe Pose Landmarker Lite | No | CPU / MediaPipe delegate |
+| Exercise router | PyTorch BiLSTM over 30-frame pose windows | Yes | Torch |
 | Router baseline | scikit-learn `HistGradientBoostingClassifier` | Yes | CPU fallback/reference |
-| Rep counting | Exercise-specific state machines over pose signals | No ML | CPU |
+| Rep counting | Exercise-specific state machines | No ML | CPU |
 | Issue markers | Transparent rules over per-rep metrics | No ML | CPU |
-| Coach summary | `Qwen/Qwen2.5-7B-Instruct` by default | No | HF Inference, local Transformers, or llama.cpp |
-| Verifier | Deterministic checks over generated JSON | No ML | CPU |
+| Coach summary | `Qwen/Qwen3-14B` by default | Base model only | HF Inference, local Transformers, or llama.cpp |
+| Coach-summary fine-tune | LoRA / merged checkpoint pipeline on Modal | Yes | Local merged-model path recommended |
+| Verifier | Deterministic safety and grounding checks | No ML | CPU |
 
 The trained router is intentionally tiny:
 
 | Artifact | Count |
-| -------- | ----: |
+| --- | ---: |
 | BiLSTM router trainable params | 182,796 |
 | Router input features per frame | 237 |
 | Window length | 30 frames |
 | Output classes | 4 |
 
-## Training Data
-
-The router starts from
-[`RickyRiccio/Real_Time_Exercise_Recognition_Dataset`](https://huggingface.co/datasets/RickyRiccio/Real_Time_Exercise_Recognition_Dataset).
-Supported folders are normalized to `squat`, `push_up`, and `shoulder_press`. Unsupported classes,
-such as curl variations, are mapped to `unknown` so the router learns when to reject clips rather
-than force a supported label.
-
-Latest Modal training run:
-
-| Metric | Value |
-| ------ | ----: |
-| Feature examples | 134 |
-| Pose windows | 2,224 |
-| Failed feature extractions | 0 |
-| Squat windows | 659 |
-| Push-up windows | 287 |
-| Shoulder press windows | 646 |
-| Unknown windows | 632 |
-
-Feature extraction converts each video to cleaned pose windows:
-
-- normalized COCO-17 landmarks with visibility
-- knee, hip, elbow, and shoulder angles
-- relative distances such as hand width over shoulder width
-- frame deltas and velocities
-- 30-frame tensors for the BiLSTM
-- aggregated vectors for the scikit-learn baseline
-
-Custom negative examples can be uploaded to the Modal data volume at `/data/raw/custom_unknown/`.
-The collection protocol is documented in
-[docs/custom-data-collection-guide.md](docs/custom-data-collection-guide.md).
-
-## Training On Modal
-
-Modal is used because the expensive work is bursty: download videos, run pose extraction over a
-dataset, train/evaluate, publish artifacts, then shut down.
-
-```bash
-uv run modal setup
-uv run modal run scripts/exercise_router_modal.py --stage ingest
-uv run modal run scripts/exercise_router_modal.py --stage features
-uv run modal run scripts/exercise_router_modal.py --stage train-baseline
-uv run modal run scripts/exercise_router_modal.py --stage train-temporal
-uv run modal run scripts/exercise_router_modal.py --stage evaluate
-```
-
-Or run the full flow:
-
-```bash
-uv run modal run scripts/exercise_router_modal.py \
-  --stage all \
-  --repo-id build-small-hackathon/pozify-exercise-router
-```
-
-Modal resources:
-
-- `pozify-router-data`: raw dataset, manifests, extracted pose-window feature caches.
-- `pozify-router-models`: `baseline.joblib`, `temporal.pt`, metrics, selection JSON, HF upload log.
-- `train_temporal`: runs on Modal `A10` GPU.
-
-Temporal router hyperparameters:
-
-| Hyperparameter | Value |
-| -------------- | ----: |
-| Architecture | BiLSTM |
-| Epochs | 73 |
-| Hidden units | 73 |
-| Dropout | 0.2174 |
-| Learning rate | 0.0004 |
-| Batch size | 54 |
-| Final training loss | 0.0003 |
-
-Current evaluation summary:
-
-| Model | Artifact | Accuracy | Unknown rejection rate |
-| ----- | -------- | -------: | ---------------------: |
-| Baseline | `baseline.joblib` | 0.9982 | 0.9968 |
-| BiLSTM temporal | `temporal.pt` | 0.9969 | 0.9968 |
-
-The active runtime artifact is `temporal.pt`; the baseline is retained for comparison and fallback.
-Full metrics are in
-[docs/exercise-router-training-report.md](docs/exercise-router-training-report.md).
-
 ## Run The App Locally
 
-Install dependencies with `uv`, then start the app:
+This repo uses a `src/` layout, but `uv` is configured with `package = false`, so the correct local
+entrypoint is:
 
 ```bash
 uv run python app.py
@@ -187,14 +117,12 @@ The app listens at:
 http://127.0.0.1:7860
 ```
 
-You can also run:
+### Mock vs Real Mode
 
-```bash
-uv run gradio app.py
-```
+By default:
 
-Real video mode is the default when a video path is provided. No-video demo runs use mock pose data
-so the app can still produce deterministic JSON artifacts.
+- if no video is provided, Pozify uses mock mode
+- if a real video is uploaded, Pozify runs the full analysis pipeline
 
 Force mock mode:
 
@@ -208,8 +136,7 @@ Force real mode:
 POZIFY_MOCK_MODE=0 uv run python app.py
 ```
 
-MediaPipe downloads `pose_landmarker_lite.task` to `/tmp/pozify-models` on first use. To provide a
-pre-downloaded task file:
+If you already have the MediaPipe task file locally:
 
 ```bash
 POZIFY_MEDIAPIPE_POSE_MODEL=/path/to/pose_landmarker_lite.task \
@@ -217,120 +144,128 @@ POZIFY_MOCK_MODE=0 \
 uv run python app.py
 ```
 
-## Router Artifacts From Hugging Face
+## Coach Summary Runtime Options
 
-Pozify loads the router from this model repo by default:
+### 1. Simplest cloud path
 
-```text
-build-small-hackathon/pozify-exercise-router
-```
-
-Override the repo:
+Use the default supported cloud model:
 
 ```bash
-export POZIFY_ROUTER_HF_REPO_ID=owner/other-pozify-router
-```
-
-Disable Hub loading and use local files only:
-
-```bash
-export POZIFY_ROUTER_DISABLE_HF=1
-```
-
-Local active artifacts should live under:
-
-```text
-models/exercise_router/active/
-  router_selection.json
-  temporal.pt
-  baseline.joblib        # optional fallback/reference
-  router.joblib          # optional baseline alias
-```
-
-Publishing details are in
-[docs/huggingface-router-release.md](docs/huggingface-router-release.md), and the model card draft is
-in [docs/huggingface-router-model-card.md](docs/huggingface-router-model-card.md).
-
-## GPU Runtime
-
-### Hugging Face ZeroGPU
-
-On a ZeroGPU Space, compute-heavy calls are wrapped with `spaces.GPU`. Hugging Face sets
-`SPACES_ZERO_GPU=1`; Pozify then defaults the Torch router to CUDA.
-
-Useful environment variables:
-
-| Variable | Purpose |
-| -------- | ------- |
-| `POZIFY_ROUTER_DEVICE` | Override router device, for example `cpu` or `cuda`. |
-| `POZIFY_SPACES_GPU_DURATION` | `spaces.GPU` duration in seconds, default `120`. |
-| `POZIFY_COACH_SUMMARY_PROVIDER` | `hf_inference`, `local_transformers`, or `llama_cpp`. |
-| `POZIFY_COACH_SUMMARY_MODEL` | Coach model id or llama.cpp model alias. |
-
-Fully local Transformers coach mode on ZeroGPU:
-
-```bash
-POZIFY_COACH_SUMMARY_PROVIDER=local_transformers \
-POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen2.5-7B-Instruct \
-POZIFY_SPACES_GPU_DURATION=300 \
+export POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
 uv run python app.py
 ```
 
-### Local CUDA
+This is the easiest path if you want the UI to avoid immediate fallback caused by unsupported custom
+HF serverless routing.
 
-If Torch sees a CUDA GPU:
+### 2. Use the fine-tuned merged model locally
+
+Download the merged repo locally, then point Pozify at it:
 
 ```bash
-POZIFY_ROUTER_DEVICE=cuda \
-POZIFY_COACH_SUMMARY_PROVIDER=local_transformers \
-POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen2.5-7B-Instruct \
+export POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR=/absolute/path/to/merged_model
+export POZIFY_COACH_SUMMARY_BASE_MODEL=Qwen/Qwen3-14B
+export POZIFY_COACH_SUMMARY_ADAPTER_ID=build-small-hackathon/pozify-coach-summary1
 uv run python app.py
 ```
 
-The router is small enough that CPU inference is usually fine; GPU is more useful for local
-Transformers coach generation.
+This is the simplest way to use `build-small-hackathon/pozify-coach-summary1` today without adding a
+dedicated inference endpoint.
 
-### llama.cpp
+### 3. llama.cpp
 
 Pozify can send the coach-summary prompt to a local `llama-server` that exposes the
-OpenAI-compatible `/v1/chat/completions` endpoint. This is the path for running the coach model as a
-GGUF with llama.cpp.
+OpenAI-compatible `/v1/chat/completions` endpoint.
 
-Start a llama.cpp server with GPU offload. Use either a local GGUF file:
+Example:
 
 ```bash
 llama-server \
-  --model /path/to/qwen2.5-7b-instruct-q4_k_m.gguf \
+  --model /path/to/qwen3-14b-instruct.gguf \
   --ctx-size 4096 \
   --n-gpu-layers 99 \
   --host 127.0.0.1 \
   --port 8080
 ```
 
-Or let llama.cpp download a GGUF repo from Hugging Face:
-
-```bash
-llama-server \
-  --hf-repo owner/qwen2.5-7b-instruct-gguf:Q4_K_M \
-  --ctx-size 4096 \
-  --n-gpu-layers 99 \
-  --host 127.0.0.1 \
-  --port 8080
-```
-
-Then run Pozify against that server:
+Then:
 
 ```bash
 POZIFY_COACH_SUMMARY_PROVIDER=llama_cpp \
-POZIFY_COACH_SUMMARY_MODEL=local-qwen2.5-7b-gguf \
+POZIFY_COACH_SUMMARY_MODEL=local-qwen3-14b-gguf \
 POZIFY_LLAMA_CPP_BASE_URL=http://127.0.0.1:8080 \
 POZIFY_COACH_SUMMARY_MAX_TOKENS=700 \
 uv run python app.py
 ```
 
-Use `--n-gpu-layers all` or a lower layer count if your llama.cpp build supports it and your GPU
-memory budget requires it. On CPU-only machines, omit `--n-gpu-layers`; generation will be slower but
-the app still works.
+### Useful environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `POZIFY_ROUTER_DEVICE` | Override router device, for example `cpu` or `cuda`. |
+| `POZIFY_SPACES_GPU_DURATION` | `spaces.GPU` duration in seconds, default `120`. |
+| `POZIFY_COACH_SUMMARY_PROVIDER` | `hf_inference`, `local_transformers`, or `llama_cpp`. |
+| `POZIFY_COACH_SUMMARY_MODEL` | Coach model id or llama.cpp model alias. |
+| `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR` | Prefer a local merged/model directory for coach summary. |
+| `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER` | Keep model output even when verifier fails. |
+
+## Exercise Router Training
+
+Run the full router training and publish flow:
+
+```bash
+uv run modal run scripts/exercise_router_modal.py \
+  --stage all \
+  --repo-id build-small-hackathon/pozify-exercise-router
+```
+
+Step-by-step:
+
+```bash
+uv run modal run scripts/exercise_router_modal.py --stage ingest
+uv run modal run scripts/exercise_router_modal.py --stage features
+uv run modal run scripts/exercise_router_modal.py --stage train-baseline
+uv run modal run scripts/exercise_router_modal.py --stage train-temporal
+uv run modal run scripts/exercise_router_modal.py --stage evaluate
+uv run modal run scripts/exercise_router_modal.py --stage publish --repo-id build-small-hackathon/pozify-exercise-router
+```
+
+The active router artifact is `temporal.pt`; the baseline is retained for comparison and fallback.
+
+## Coach Summary Training
+
+Build the grounded SFT dataset:
+
+```bash
+uv run python scripts/build_coach_summary_sft_dataset.py
+```
+
+Run the full coach-summary Modal flow:
+
+```bash
+uv run modal run scripts/coach_summary_modal.py \
+  --stage all \
+  --epochs 2 \
+  --style-weight 0.2 \
+  --repo-id build-small-hackathon/pozify-coach-summary1
+```
+
+Step-by-step:
+
+```bash
+uv run modal run scripts/coach_summary_modal.py --stage prepare-data
+uv run modal run scripts/coach_summary_modal.py --stage train --epochs 2 --style-weight 0.2
+uv run modal run scripts/coach_summary_modal.py --stage evaluate --limit 5
+uv run modal run scripts/coach_summary_modal.py --stage merge
+uv run modal run scripts/coach_summary_modal.py --stage publish-merged --repo-id build-small-hackathon/pozify-coach-summary1
+```
+
+Important runtime note:
+
+- publishing the merged repo does not automatically make it usable through HF serverless
+  `chat_completion`
+- if you want immediate working inference, use `Qwen/Qwen3-14B`
+- if you want to use the fine-tuned model, use `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`
 
 ## Generated Artifacts
 
@@ -351,49 +286,43 @@ Each run creates `runs/<run_id>/` with:
 - `verification.json`
 - `final_report.json`
 
-JSON artifacts are validated before they are written. The final report records the analysis mode,
-pose source, coach provider, coach model, verifier status, and downloadable artifact URLs. The
-coach-summary verifier is disabled by default; set `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER=0` or pass
-`bypass_verifier=false` to run it.
+JSON artifacts are validated before they are written. The final report records:
+
+- analysis mode
+- pose source
+- knowledge-card provenance
+- coach summary provider/model/source
+- verifier status and bypass flags
+
+## Docs Map
+
+See [docs/01-docs-index.md](docs/01-docs-index.md) for the ordered documentation map.
+
+Most useful operational docs:
+
+- [docs/10-overview-build-small-hackathon-report.md](docs/10-overview-build-small-hackathon-report.md)
+- [docs/20-router-training-report.md](docs/20-router-training-report.md)
+- [docs/21-router-huggingface-release.md](docs/21-router-huggingface-release.md)
+- [docs/30-coach-modal-training.md](docs/30-coach-modal-training.md)
+- [docs/31-coach-training-report.md](docs/31-coach-training-report.md)
+- [docs/40-data-custom-collection-guide.md](docs/40-data-custom-collection-guide.md)
 
 ## Project Structure
 
 ```text
 app.py
 web/
-  index.html
-  app.js
-  report.js
-  styles.css
 src/pozify/
   pipeline.py
   contracts.py
   steps/
-    video_qc.py
-    pose_landmarker.py
-    exercise_classifier.py
-    annotated_renderer.py
-    coach_summary.py
-    verifier.py
   ml/
-    exercise_router_features.py
-    exercise_router_temporal.py
-    exercise_router_inference.py
   slm/
-    providers.py
-    prompting.py
   exercises/
-    squat/
-    push_up/
-    shoulder_press/
 scripts/
-  exercise_router_modal.py
-  upload_exercise_router_to_hf.py
 docs/
-  build-small-hackathon-report.md
-  exercise-router-training-report.md
-  huggingface-router-release.md
-  custom-data-collection-guide.md
+demo/
+runs/
 ```
 
 ## Development Checks
@@ -410,13 +339,3 @@ Run the real MediaPipe fixture smoke test only when the fixture is available:
 POZIFY_RUN_REAL_POSE_TESTS=1 \
 uv run python -m unittest tests.test_pose_steps.PoseStepTests.test_real_sample_mov_extracts_pose_landmarks
 ```
-
-## Notes And Limits
-
-- Router metrics are from the current Modal feature cache, not a broad production benchmark.
-- The app depends on full-body framing and usable pose extraction.
-- Unsupported or low-confidence clips should route to `unknown` instead of receiving fabricated
-  coaching.
-- Qwen is prompted and verified; it is not fine-tuned in this project.
-- More held-out videos, camera angles, body types, and custom unknown clips are needed before using
-  Pozify as a robust training product.

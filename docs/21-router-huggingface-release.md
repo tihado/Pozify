@@ -61,7 +61,7 @@ Omit `--private` if the model repository should be public.
 
 The Modal training script can also publish directly from the `pozify-router-models` volume after
 evaluation. It reads `HF_TOKEN`, `POZIFY_ROUTER_HF_REPO_ID`, and optional
-`POZIFY_ROUTER_HF_PRIVATE=1` from `.env` via `modal.Secret.from_dotenv()`:
+`POZIFY_ROUTER_HF_PRIVATE=1` from local `.env` and injects them into Modal secrets at runtime:
 
 ```bash
 uv run modal run scripts/exercise_router_modal.py --stage all

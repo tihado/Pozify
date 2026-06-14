@@ -1,5 +1,11 @@
 # Pozify Coach Model Data Plan
 
+Status: planning and architecture note.
+
+This file is useful for model and dataset strategy, but it is not the source of truth for the
+current run/deploy commands. Use [../README.md](../README.md) and
+[30-coach-modal-training.md](30-coach-modal-training.md) for the current workflow.
+
 ## Objective
 
 Define a practical data and modeling plan for improving Pozify's coach summary and coach-style guidance using open datasets and the current codebase.

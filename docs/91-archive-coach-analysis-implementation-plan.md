@@ -1,5 +1,10 @@
 # Pozify Coach Analysis Expansion Plan
 
+Status: historical implementation plan for the coach-analysis branch work.
+
+Use [../README.md](../README.md) and [01-docs-index.md](01-docs-index.md) for the current runtime
+workflow and operational commands.
+
 ## Objective
 
 Extend Pozify's grounded coach-summary pipeline with a dataset-ready knowledge layer so the app can incorporate richer exercise expertise without turning the product into a generic chatbot.

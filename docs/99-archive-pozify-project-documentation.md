@@ -1,5 +1,10 @@
 # Pozify Project Documentation
 
+Status: large historical product/design document.
+
+Some sections may lag behind the current runtime implementation. For the current project entrypoint,
+commands, and model workflow, use [../README.md](../README.md) and [01-docs-index.md](01-docs-index.md).
+
 ## 1. Product Overview
 
 **Pozify** is a Gradio web app that lets a user upload or record a short workout video, then returns a rep-by-rep movement report built from pose landmarks, movement metrics, frame-level issue markers, and goal-aware coaching feedback.
