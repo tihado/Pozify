@@ -127,9 +127,10 @@ def _axis(values: dict[str, float] | None, axis: str) -> float:
 
 
 def _visibility(frame: PoseFrame, values: dict[str, float] | None) -> float:
-    if values is not None and "visibility" in values:
-        return max(0.0, min(1.0, float(values["visibility"])))
-    return 0.0
+    if values is None:
+        return 0.0
+    visibility = values.get("visibility", values.get("presence", 1.0))
+    return max(0.0, min(1.0, float(visibility)))
 
 
 def _point(frame: PoseFrame, name: str) -> tuple[float, float, float] | None:

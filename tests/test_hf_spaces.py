@@ -18,18 +18,18 @@ class HfSpacesRuntimeTests(unittest.TestCase):
             self.assertFalse(zero_gpu_enabled())
             self.assertEqual(router_torch_device(), "cpu")
 
-    def test_zero_gpu_selects_cuda_runtime_device(self) -> None:
+    def test_zero_gpu_keeps_router_on_cpu_by_default(self) -> None:
         with patch.dict(os.environ, {"SPACES_ZERO_GPU": "1"}, clear=True):
             self.assertTrue(zero_gpu_enabled())
-            self.assertEqual(router_torch_device(), "cuda")
+            self.assertEqual(router_torch_device(), "cpu")
 
-    def test_explicit_router_device_overrides_zero_gpu_default(self) -> None:
+    def test_explicit_router_device_overrides_default(self) -> None:
         with patch.dict(
             os.environ,
-            {"SPACES_ZERO_GPU": "1", "POZIFY_ROUTER_DEVICE": "cpu"},
+            {"SPACES_ZERO_GPU": "1", "POZIFY_ROUTER_DEVICE": "cuda"},
             clear=True,
         ):
-            self.assertEqual(router_torch_device(), "cpu")
+            self.assertEqual(router_torch_device(), "cuda")
 
 
 if __name__ == "__main__":

@@ -90,7 +90,7 @@ class SlmProviderTests(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "POZIFY_COACH_SUMMARY_MODEL": "build-small-hackathon/pozify-coach-summary",
+                "POZIFY_COACH_SUMMARY_MODEL": "owner/custom-coach-summary",
                 "POZIFY_COACH_SUMMARY_ADAPTER_ID": "pozify/coach-summary-lora",
             },
             clear=True,
@@ -98,7 +98,7 @@ class SlmProviderTests(unittest.TestCase):
             model = get_coach_summary_model()
 
         self.assertIsInstance(model, HFInferenceCoachSummaryModel)
-        self.assertEqual(model.model, "build-small-hackathon/pozify-coach-summary")
+        self.assertEqual(model.model, "owner/custom-coach-summary")
 
     def test_remote_model_falls_back_to_default_when_only_adapter_repo_is_set(self) -> None:
         with patch.dict(

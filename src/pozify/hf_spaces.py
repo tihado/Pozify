@@ -31,7 +31,7 @@ def router_torch_device() -> str:
     configured_device = os.getenv(ROUTER_DEVICE_ENV)
     if configured_device:
         return configured_device.strip().lower()
-    return "cuda" if zero_gpu_enabled() else "cpu"
+    return "cpu"
 
 
 def spaces_gpu(*, duration: Any = None, size: str | None = None) -> Callable[[F], F]:

@@ -47,13 +47,14 @@ MEDIAPIPE_COCO17_INDICES = [
 
 
 def landmark_to_dict(landmark: Any) -> dict[str, float]:
+    presence = getattr(landmark, "presence", None)
+    visibility = getattr(landmark, "visibility", presence if presence is not None else 1.0)
     payload = {
         "x": round(float(landmark.x), 6),
         "y": round(float(landmark.y), 6),
         "z": round(float(landmark.z), 6),
-        "visibility": round(float(getattr(landmark, "visibility", 0.0)), 6),
+        "visibility": round(float(visibility), 6),
     }
-    presence = getattr(landmark, "presence", None)
     if presence is not None:
         payload["presence"] = round(float(presence), 6)
     return payload

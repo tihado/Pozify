@@ -177,7 +177,7 @@ class ExerciseRouterFeatureTests(unittest.TestCase):
         self.assertEqual(extract_router_windows(empty), [])
         self.assertEqual(extract_router_windows(_sequence(visibility=0.05)), [])
 
-    def test_missing_landmark_visibility_is_zero(self) -> None:
+    def test_missing_landmark_is_zero_in_router_features(self) -> None:
         sequence = _sequence("push_up")
         frame = sequence.frames[0]
         frame.landmarks.pop("nose")
@@ -187,6 +187,36 @@ class ExerciseRouterFeatureTests(unittest.TestCase):
         self.assertGreater(len(windows), 0)
         nose_visibility_index = window_tensor_feature_names().index("nose_visibility")
         self.assertEqual(windows[0].tensor[0, nose_visibility_index], 0.0)
+
+    def test_landmarks_without_visibility_still_produce_router_windows(self) -> None:
+        sequence = _sequence("push_up")
+        frames = [
+            PoseFrame(
+                frame.frame_index,
+                frame.timestamp_sec,
+                {
+                    name: {
+                        key: value
+                        for key, value in landmark.items()
+                        if key != "visibility"
+                    }
+                    for name, landmark in frame.landmarks.items()
+                },
+                frame.world_landmarks,
+                frame.pose_quality,
+            )
+            for frame in sequence.frames
+        ]
+        no_visibility_sequence = PoseSequence(
+            frames=frames,
+            normalized=sequence.normalized,
+            smoothing_method=sequence.smoothing_method,
+            pose_valid_ratio=sequence.pose_valid_ratio,
+        )
+
+        windows = extract_router_windows(no_visibility_sequence)
+
+        self.assertGreater(len(windows), 0)
 
 
 class ExerciseRouterAggregationTests(unittest.TestCase):

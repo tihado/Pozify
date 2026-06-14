@@ -196,14 +196,15 @@ from the current feature cache. More independent held-out videos are needed.
 
 ### Router
 
-The router runs through Torch. It defaults to CPU locally and CUDA on Hugging Face ZeroGPU when
-`SPACES_ZERO_GPU=1`.
+The router runs through Torch. It defaults to CPU in local runs and on Hugging Face Spaces because
+the router is tiny and CPU avoids CUDA/ZeroGPU runtime failures during classification.
 
 ```bash
 POZIFY_ROUTER_DEVICE=cuda uv run python app.py
 ```
 
-The router is tiny, so CPU is acceptable. GPU matters more for local language-model generation.
+Set `POZIFY_ROUTER_DEVICE=cuda` only when you explicitly want to test CUDA routing. GPU matters
+more for local language-model generation than for this small classifier.
 
 ### Hugging Face ZeroGPU
 
