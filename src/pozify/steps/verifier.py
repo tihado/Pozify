@@ -11,7 +11,7 @@ from pozify.contracts import (
     Variation,
     Verification,
 )
-from pozify.knowledge_cards import KNOWN_ISSUE_LABELS
+from pozify.knowledge_cards import known_issue_labels
 
 
 DIAGNOSIS_PATTERNS = (
@@ -80,7 +80,7 @@ def _mentioned_labels(summary: CoachSummary) -> set[str]:
     text = " ".join(_summary_sections(summary))
     labels = set(re.findall(r"`([a-z0-9_]+)`", text))
     lowered = text.lower()
-    for label in KNOWN_ISSUE_LABELS:
+    for label in known_issue_labels():
         if label in lowered:
             labels.add(label)
     return labels
@@ -117,7 +117,7 @@ def run(
 ) -> Verification:
     allowed_issues = {issue.issue for issue in issues.issues}
     mentioned_labels = _mentioned_labels(summary)
-    mentioned_issues = mentioned_labels & KNOWN_ISSUE_LABELS
+    mentioned_issues = mentioned_labels & known_issue_labels()
 
     no_issue_outside_json = mentioned_issues <= allowed_issues
 

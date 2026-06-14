@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
+from functools import lru_cache
+from pathlib import Path
 
 from pozify.contracts import ExerciseClassification, GOALS, IssueMarkers, UserProfile, Variation
 
@@ -26,6 +30,24 @@ class KnowledgeCard:
     allowed_interpretations: tuple[str, ...] = ()
     forbidden_claims: tuple[str, ...] = ()
     related_cards: tuple[str, ...] = ()
+    source_kind: str = "builtin"
+    source_path: str | None = None
+
+
+@dataclass(frozen=True)
+class KnowledgeCatalog:
+    cards: tuple[KnowledgeCard, ...]
+    cards_by_id: dict[str, KnowledgeCard]
+    cards_by_label: dict[str, KnowledgeCard]
+    loaded_pack_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class KnowledgeRetrieval:
+    cards: list[KnowledgeCard]
+    loaded_pack_paths: tuple[str, ...]
+    external_cards_loaded: int
+    external_cards_retrieved: int
 
 
 def _card(
@@ -40,6 +62,8 @@ def _card(
     allowed_interpretations: tuple[str, ...] = (),
     forbidden_claims: tuple[str, ...] = (),
     related_cards: tuple[str, ...] = (),
+    source_kind: str = "builtin",
+    source_path: str | None = None,
 ) -> KnowledgeCard:
     return KnowledgeCard(
         card_id=card_id,
@@ -52,6 +76,8 @@ def _card(
         allowed_interpretations=allowed_interpretations,
         forbidden_claims=forbidden_claims,
         related_cards=related_cards,
+        source_kind=source_kind,
+        source_path=source_path,
     )
 
 
@@ -315,22 +341,202 @@ CARD_REGISTRY: tuple[KnowledgeCard, ...] = (
 )
 
 
-CARDS_BY_ID = {card.card_id: card for card in CARD_REGISTRY}
-CARDS_BY_LABEL = {
-    label: card
-    for card in CARD_REGISTRY
-    for label in card.labels
-}
-KNOWN_ISSUE_LABELS = frozenset(
-    label for card in CARD_REGISTRY if card.card_type == "issue" for label in card.labels
+DEFAULT_CARD_PACK_PATHS = (
+    Path(__file__).resolve().parents[2] / "data/knowledge_cards/grounded_exercise_expansion.json",
 )
-KNOWN_VARIATION_LABELS = frozenset(
-    label for card in CARD_REGISTRY if card.card_type == "variation" for label in card.labels
-)
+CARD_PACKS_ENV = "POZIFY_KNOWLEDGE_CARD_PACKS"
+
+
+def _candidate_card_pack_paths() -> tuple[str, ...]:
+    candidates: list[str] = []
+    for path in DEFAULT_CARD_PACK_PATHS:
+        if path.is_file():
+            candidates.append(str(path.resolve()))
+
+    configured = os.getenv(CARD_PACKS_ENV, "").strip()
+    if not configured:
+        return tuple(candidates)
+
+    for raw_path in configured.split(os.pathsep):
+        cleaned = raw_path.strip()
+        if not cleaned:
+            continue
+        resolved = str(Path(cleaned).expanduser().resolve())
+        if resolved not in candidates:
+            candidates.append(resolved)
+    return tuple(candidates)
+
+
+def _normalize_string_tuple(values: object, field_name: str, source_path: str) -> tuple[str, ...]:
+    if not isinstance(values, list):
+        raise ValueError(f"{source_path}: {field_name} must be a list of strings")
+    normalized: list[str] = []
+    for index, value in enumerate(values):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"{source_path}: {field_name}[{index}] must be a non-empty string"
+            )
+        normalized.append(value.strip())
+    return tuple(normalized)
+
+
+def _load_pack_card(payload: object, source_path: str) -> KnowledgeCard:
+    if not isinstance(payload, dict):
+        raise ValueError(f"{source_path}: each card must be an object")
+
+    required = {
+        "card_id",
+        "card_type",
+        "labels",
+        "title",
+        "summary",
+        "evidence_rules",
+        "coaching_points",
+    }
+    missing = sorted(required - payload.keys())
+    if missing:
+        raise ValueError(
+            f"{source_path}: card missing required field(s): {', '.join(missing)}"
+        )
+
+    card_id = payload["card_id"]
+    card_type = payload["card_type"]
+    title = payload["title"]
+    summary = payload["summary"]
+    if not isinstance(card_id, str) or not card_id.strip():
+        raise ValueError(f"{source_path}: card_id must be a non-empty string")
+    if not isinstance(card_type, str) or not card_type.strip():
+        raise ValueError(f"{source_path}: card_type must be a non-empty string")
+    if not isinstance(title, str) or not title.strip():
+        raise ValueError(f"{source_path}: title must be a non-empty string")
+    if not isinstance(summary, str) or not summary.strip():
+        raise ValueError(f"{source_path}: summary must be a non-empty string")
+
+    return _card(
+        card_id=card_id.strip(),
+        card_type=card_type.strip(),
+        labels=_normalize_string_tuple(payload["labels"], "labels", source_path),
+        title=title.strip(),
+        summary=summary.strip(),
+        evidence_rules=_normalize_string_tuple(
+            payload["evidence_rules"], "evidence_rules", source_path
+        ),
+        coaching_points=_normalize_string_tuple(
+            payload["coaching_points"], "coaching_points", source_path
+        ),
+        allowed_interpretations=_normalize_string_tuple(
+            payload.get("allowed_interpretations", []),
+            "allowed_interpretations",
+            source_path,
+        ),
+        forbidden_claims=_normalize_string_tuple(
+            payload.get("forbidden_claims", []),
+            "forbidden_claims",
+            source_path,
+        ),
+        related_cards=_normalize_string_tuple(
+            payload.get("related_cards", []),
+            "related_cards",
+            source_path,
+        ),
+        source_kind="external",
+        source_path=source_path,
+    )
+
+
+def _load_external_cards(path: str) -> tuple[KnowledgeCard, ...]:
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"Knowledge card pack not found: {resolved}")
+
+    payload = json.loads(resolved.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{resolved}: card pack must be a JSON object")
+    cards_payload = payload.get("cards")
+    if not isinstance(cards_payload, list):
+        raise ValueError(f"{resolved}: `cards` must be a list")
+
+    cards = [_load_pack_card(card_payload, str(resolved)) for card_payload in cards_payload]
+    seen_ids: set[str] = set()
+    for card in cards:
+        if card.card_id in seen_ids:
+            raise ValueError(f"{resolved}: duplicate card_id {card.card_id!r}")
+        seen_ids.add(card.card_id)
+    return tuple(cards)
+
+
+def _build_cards_by_label(cards: tuple[KnowledgeCard, ...]) -> dict[str, KnowledgeCard]:
+    cards_by_label: dict[str, KnowledgeCard] = {}
+    for card in cards:
+        for label in card.labels:
+            existing = cards_by_label.get(label)
+            if existing is not None and existing.card_id != card.card_id:
+                raise ValueError(
+                    f"Knowledge label conflict for {label!r}: "
+                    f"{existing.card_id!r} vs {card.card_id!r}"
+                )
+            cards_by_label[label] = card
+    return cards_by_label
+
+
+@lru_cache(maxsize=8)
+def _catalog_for_paths(pack_paths: tuple[str, ...]) -> KnowledgeCatalog:
+    cards_by_id = {card.card_id: card for card in CARD_REGISTRY}
+    for path in pack_paths:
+        for card in _load_external_cards(path):
+            cards_by_id[card.card_id] = card
+
+    cards = tuple(
+        sorted(
+            cards_by_id.values(),
+            key=lambda card: (CARD_TYPE_ORDER.get(card.card_type, 99), card.card_id),
+        )
+    )
+    return KnowledgeCatalog(
+        cards=cards,
+        cards_by_id={card.card_id: card for card in cards},
+        cards_by_label=_build_cards_by_label(cards),
+        loaded_pack_paths=pack_paths,
+    )
+
+
+def get_catalog(pack_paths: tuple[str, ...] | None = None) -> KnowledgeCatalog:
+    selected_paths = _candidate_card_pack_paths() if pack_paths is None else pack_paths
+    return _catalog_for_paths(tuple(selected_paths))
+
+
+def configured_card_pack_paths() -> tuple[str, ...]:
+    return get_catalog().loaded_pack_paths
+
+
+def clear_catalog_cache() -> None:
+    _catalog_for_paths.cache_clear()
+
+
+def _labels_for_card_type(card_type: str, *, pack_paths: tuple[str, ...] | None = None) -> frozenset[str]:
+    catalog = get_catalog(pack_paths)
+    return frozenset(
+        label
+        for card in catalog.cards
+        if card.card_type == card_type
+        for label in card.labels
+    )
+
+
+KNOWN_ISSUE_LABELS = _labels_for_card_type("issue")
+KNOWN_VARIATION_LABELS = _labels_for_card_type("variation")
+
+
+def known_issue_labels() -> frozenset[str]:
+    return _labels_for_card_type("issue")
+
+
+def known_variation_labels() -> frozenset[str]:
+    return _labels_for_card_type("variation")
 
 
 def get_card_by_label(label: str) -> KnowledgeCard | None:
-    return CARDS_BY_LABEL.get(label)
+    return get_catalog().cards_by_label.get(label)
 
 
 def cards_for_labels(labels: list[str] | tuple[str, ...]) -> list[KnowledgeCard]:
@@ -343,6 +549,32 @@ def cards_for_labels(labels: list[str] | tuple[str, ...]) -> list[KnowledgeCard]
     return sorted(
         cards.values(),
         key=lambda card: (CARD_TYPE_ORDER.get(card.card_type, 99), card.card_id),
+    )
+
+
+def retrieve_cards_with_metadata(
+    *,
+    profile: UserProfile,
+    classification: ExerciseClassification,
+    variation: Variation,
+    issues: IssueMarkers,
+) -> KnowledgeRetrieval:
+    cards = retrieve_cards(
+        profile=profile,
+        classification=classification,
+        variation=variation,
+        issues=issues,
+    )
+    catalog = get_catalog()
+    return KnowledgeRetrieval(
+        cards=cards,
+        loaded_pack_paths=catalog.loaded_pack_paths,
+        external_cards_loaded=sum(
+            1 for card in catalog.cards if card.source_kind == "external"
+        ),
+        external_cards_retrieved=sum(
+            1 for card in cards if card.source_kind == "external"
+        ),
     )
 
 

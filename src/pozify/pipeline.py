@@ -11,7 +11,7 @@ from pozify.artifacts import write_json
 from pozify.contracts import UserProfile, to_dict
 from pozify.env import env_truthy, load_local_env
 from pozify.exercises import create_exercise_strategy
-from pozify.knowledge_cards import retrieve_cards
+from pozify.knowledge_cards import retrieve_cards_with_metadata
 from pozify.steps import (
     annotated_renderer,
     coach_summary,
@@ -232,12 +232,13 @@ def run_pipeline(
     if mock_mode:
         mock_steps.insert(0, "exercise_classifier")
 
-    summary_cards = retrieve_cards(
+    knowledge_retrieval = retrieve_cards_with_metadata(
         profile=profile,
         classification=classification,
         variation=variation,
         issues=issues,
     )
+    summary_cards = knowledge_retrieval.cards
     coach_result = coach_summary.run_with_metadata(
         profile,
         classification,
@@ -319,6 +320,9 @@ def run_pipeline(
             "coach_summary_model": coach_summary_model,
             "coach_summary_verifier_bypassed": coach_summary_verifier_bypassed,
             "coach_summary_verifier_bypass_requested": bypass_verifier_enabled,
+            "knowledge_card_pack_paths": list(knowledge_retrieval.loaded_pack_paths),
+            "knowledge_external_cards_loaded": knowledge_retrieval.external_cards_loaded,
+            "knowledge_external_cards_retrieved": knowledge_retrieval.external_cards_retrieved,
         },
     }
     write_artifact("final_report.json", final_report)
