@@ -30,6 +30,50 @@ class SlmProviderTests(unittest.TestCase):
 
         self.assertIsInstance(model, LocalTransformersCoachSummaryModel)
 
+    def test_hf_space_local_dir_falls_back_to_hf_inference_by_default(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "SPACE_ID": "owner/space",
+                "POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR": "/tmp/local-model",
+                "POZIFY_COACH_SUMMARY_MODEL": "build-small-hackathon/pozify-coach-summary1",
+            },
+            clear=True,
+        ):
+            model = get_coach_summary_model()
+
+        self.assertIsInstance(model, HFInferenceCoachSummaryModel)
+        self.assertEqual(model.model, "build-small-hackathon/pozify-coach-summary1")
+
+    def test_hf_space_local_transformers_provider_requires_explicit_opt_in(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "SPACE_ID": "owner/space",
+                "POZIFY_COACH_SUMMARY_PROVIDER": "local_transformers",
+                "POZIFY_COACH_SUMMARY_MODEL": "build-small-hackathon/pozify-coach-summary1",
+            },
+            clear=True,
+        ):
+            model = get_coach_summary_model()
+
+        self.assertIsInstance(model, HFInferenceCoachSummaryModel)
+
+    def test_hf_space_can_opt_in_to_local_transformers_provider(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "SPACE_ID": "owner/space",
+                "POZIFY_ALLOW_LOCAL_TRANSFORMERS_ON_SPACES": "1",
+                "POZIFY_COACH_SUMMARY_PROVIDER": "local_transformers",
+                "POZIFY_COACH_SUMMARY_MODEL": "Qwen/Qwen2.5-7B-Instruct",
+            },
+            clear=True,
+        ):
+            model = get_coach_summary_model()
+
+        self.assertIsInstance(model, LocalTransformersCoachSummaryModel)
+
     def test_returns_hf_inference_model_when_remote_enabled(self) -> None:
         with patch.dict(
             os.environ,

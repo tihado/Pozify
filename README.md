@@ -246,6 +246,21 @@ inference is unavailable or the model output fails validation.
 
 Recommended if you want the live Space or local demo to behave predictably during judging.
 
+For Hugging Face Spaces, keep the provider on hosted inference unless you have a dedicated local
+model runtime:
+
+```bash
+POZIFY_COACH_SUMMARY_PROVIDER=hf_inference
+POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
+```
+
+Local Transformers inference is disabled on Spaces by default because large merged models can hit
+CUDA/runtime failures during generation. To opt in deliberately, set:
+
+```bash
+POZIFY_ALLOW_LOCAL_TRANSFORMERS_ON_SPACES=1
+```
+
 ### 2. Use the fine-tuned merged model locally
 
 Download the merged repo locally, then point Pozify at it:
@@ -304,6 +319,7 @@ uv run python app.py
 | `POZIFY_COACH_SUMMARY_PROVIDER`        | `hf_inference`, `local_transformers`, or `llama_cpp`.    |
 | `POZIFY_COACH_SUMMARY_MODEL`           | Coach model id or llama.cpp model alias.                 |
 | `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR` | Prefer a local merged/model directory for coach summary. |
+| `POZIFY_ALLOW_LOCAL_TRANSFORMERS_ON_SPACES` | Allow local Transformers generation on HF Spaces. Default is off. |
 | `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER` | Keep model output even when verifier fails.              |
 
 ## Exercise Router Training

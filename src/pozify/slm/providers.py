@@ -17,6 +17,7 @@ BASE_MODEL_ENV = "POZIFY_COACH_SUMMARY_BASE_MODEL"
 LOCAL_MODEL_DIR_ENV = "POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR"
 ADAPTER_ENV = "POZIFY_COACH_SUMMARY_ADAPTER_ID"
 DISABLE_REMOTE_ENV = "POZIFY_COACH_SUMMARY_DISABLE_REMOTE"
+ALLOW_LOCAL_TRANSFORMERS_ON_SPACES_ENV = "POZIFY_ALLOW_LOCAL_TRANSFORMERS_ON_SPACES"
 MAX_TOKENS_ENV = "POZIFY_COACH_SUMMARY_MAX_TOKENS"
 TEMPERATURE_ENV = "POZIFY_COACH_SUMMARY_TEMPERATURE"
 HF_TOKEN_ENV = "HF_TOKEN"
@@ -70,6 +71,16 @@ def _env_int(name: str, default: int) -> int:
         return int(value)
     except ValueError:
         return default
+
+
+def _running_on_hf_space() -> bool:
+    return bool(os.getenv("SPACE_ID") or os.getenv("SPACE_HOST"))
+
+
+def _local_transformers_allowed_on_spaces() -> bool:
+    return not _running_on_hf_space() or env_truthy(
+        os.getenv(ALLOW_LOCAL_TRANSFORMERS_ON_SPACES_ENV)
+    )
 
 
 class HFInferenceCoachSummaryModel:
@@ -387,6 +398,15 @@ def get_coach_summary_model() -> CoachSummaryModel | None:
 
     local_model_dir = os.getenv(LOCAL_MODEL_DIR_ENV)
     if local_model_dir:
+        if not _local_transformers_allowed_on_spaces():
+            if env_truthy(os.getenv(DISABLE_REMOTE_ENV)):
+                return None
+            return HFInferenceCoachSummaryModel(
+                model=os.getenv(MODEL_ENV, DEFAULT_MODEL),
+                max_tokens=_env_int(MAX_TOKENS_ENV, 700),
+                temperature=_env_float(TEMPERATURE_ENV, 0.1),
+                token=os.getenv(HF_TOKEN_ENV),
+            )
         return LocalTransformersCoachSummaryModel(
             model=local_model_dir,
             max_tokens=_env_int(MAX_TOKENS_ENV, 700),
@@ -408,6 +428,15 @@ def get_coach_summary_model() -> CoachSummaryModel | None:
         )
 
     if provider in LOCAL_TRANSFORMERS_ALIASES:
+        if not _local_transformers_allowed_on_spaces():
+            if env_truthy(os.getenv(DISABLE_REMOTE_ENV)):
+                return None
+            return HFInferenceCoachSummaryModel(
+                model=os.getenv(MODEL_ENV, DEFAULT_MODEL),
+                max_tokens=_env_int(MAX_TOKENS_ENV, 700),
+                temperature=_env_float(TEMPERATURE_ENV, 0.1),
+                token=os.getenv(HF_TOKEN_ENV),
+            )
         return LocalTransformersCoachSummaryModel(
             model=os.getenv(MODEL_ENV, DEFAULT_MODEL),
             max_tokens=_env_int(MAX_TOKENS_ENV, 700),
