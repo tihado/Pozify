@@ -503,6 +503,83 @@ function BriefTile({ eyebrow, title, body, tone = "" }) {
   );
 }
 
+function CoachOverview({ result }) {
+  if (!result) return null;
+  const summary = result.report.coach_summary;
+  const coachArtifacts = result.report.artifacts || {};
+  const coachSource = coachArtifacts.coach_summary_source || "";
+  const coachProvider = coachArtifacts.coach_summary_provider || "n/a";
+  const coachModel = coachArtifacts.coach_summary_model || "n/a";
+  const verifierBypassed = Boolean(
+    coachArtifacts.coach_summary_verifier_bypassed,
+  );
+  const isFallback = coachSource.startsWith("fallback");
+  const cueNow =
+    summary.top_fixes?.[0] ||
+    summary.next_session_plan?.[0] ||
+    summary.summary;
+
+  return h(
+    "section",
+    { className: "coach-spotlight" },
+    h(
+      "div",
+      { className: "coach-command" },
+      h(
+        "div",
+        { className: "coach-command-copy" },
+        h("span", null, "Coach intelligence"),
+        h("strong", null, cueNow),
+        h("p", null, summary.summary),
+      ),
+      h(
+        "div",
+        { className: "coach-meta-stack" },
+        metaChip(`Provider: ${coachProvider}`, "blue"),
+        metaChip(`Model: ${coachModel}`),
+        metaChip(`Source: ${coachSource || "n/a"}`, isFallback ? "watch" : "strong"),
+      ),
+    ),
+    isFallback || verifierBypassed
+      ? h(
+          "div",
+          { className: "coach-system-row" },
+          isFallback
+            ? h(
+                "p",
+                { className: "system-note" },
+                "A conservative fallback summary was used because the generated summary was unavailable or did not pass verification.",
+              )
+            : null,
+          verifierBypassed
+            ? h(
+                "p",
+                { className: "system-note warning" },
+                "Verifier bypass is active, so the model summary is shown even though verification did not pass.",
+              )
+            : null,
+        )
+      : null,
+    h(
+      "div",
+      { className: "coach-overview-grid" },
+      h(NoteList, { title: "Fix first", items: summary.top_fixes, className: "coach-note priority" }),
+      h(NoteList, { title: "Next session", items: summary.next_session_plan, className: "coach-note next" }),
+      h(NoteList, { title: "Keep", items: summary.what_looked_good, className: "coach-note" }),
+      h(NoteList, {
+        title: "Variation vs issue",
+        items: summary.valid_variation_vs_issue,
+        className: "coach-note",
+      }),
+      h(NoteList, {
+        title: "Confidence notes",
+        items: summary.confidence_notes,
+        className: "coach-note muted",
+      }),
+    ),
+  );
+}
+
 function RepTimeline({
   report,
   compact = false,
@@ -688,7 +765,7 @@ function SummaryTab({ result }) {
           )
         : h("p", { className: "empty-copy" }, "No movement scores available."),
     ),
-    h(RepTimeline, { report, compact: true }),
+    h(CoachOverview, { result }),
     h(
       "div",
       { className: "note-grid report-notes" },
@@ -811,11 +888,11 @@ function MetricsTab({ result }) {
   );
 }
 
-function RepDetailPanel({ report, rep, result, playbackTime }) {
+function RepDetailPanel({ report, rep, result, playbackTime, compact = false }) {
   if (!rep) {
     return h(
       "aside",
-      { className: "rep-detail-panel" },
+      { className: `rep-detail-panel${compact ? " compact" : ""}` },
       h("span", { className: "rep-detail-kicker" }, "Current rep"),
       h("strong", null, "No rep selected"),
       h("p", null, "Play the video or click a rep segment to inspect its metrics."),
@@ -862,6 +939,112 @@ function RepDetailPanel({ report, rep, result, playbackTime }) {
   const issueText = repIssues.length
     ? `${repIssues.length} issue marker${repIssues.length === 1 ? "" : "s"} attached to this rep.`
     : "No issue marker is attached, so use the lowest metric as the review cue.";
+  const primaryIssue = repIssues[0] || null;
+
+  if (compact) {
+    return h(
+      "aside",
+      { className: `rep-detail-panel compact ${scoreTone(score)}` },
+      h(
+        "div",
+        { className: "rep-detail-head" },
+        h(
+          "div",
+          null,
+          h("span", { className: "rep-detail-kicker" }, "Current rep"),
+          h("strong", null, `Rep ${rep.rep_id}`),
+          h("small", null, timeRange(rep.start_sec, rep.end_sec)),
+        ),
+        metaChip(score === null ? "no score" : percent(score), scoreTone(score)),
+      ),
+      h(
+        "div",
+        { className: "rep-fact-grid compact" },
+        h(
+          "div",
+          { className: "rep-fact" },
+          h("span", null, "Duration"),
+          h("strong", null, `${duration.toFixed(2)}s`),
+        ),
+        h(
+          "div",
+          { className: "rep-fact" },
+          h("span", null, "Focus"),
+          h("strong", null, weakestMetric ? `${weakestMetric.name} ${percent(weakestMetric.value)}` : "n/a"),
+        ),
+        h(
+          "div",
+          { className: "rep-fact" },
+          h("span", null, "Frames"),
+          h("strong", null, `${rep.start_frame}-${rep.end_frame}`),
+        ),
+        h(
+          "div",
+          { className: "rep-fact" },
+          h("span", null, "Issues"),
+          h("strong", null, repIssues.length ? String(repIssues.length) : "clear"),
+        ),
+      ),
+      h(
+        "div",
+        { className: "rep-progress-card compact" },
+        h(
+          "div",
+          { className: "rep-now" },
+          h("span", null, "playhead"),
+          h("strong", null, `${playbackTime.toFixed(2)}s`),
+        ),
+        h(
+          "div",
+          { className: "rep-progress-track", "aria-hidden": "true" },
+          h("span", {
+            className: "rep-progress-fill",
+            style: { width: `${Math.round(repProgress * 100)}%` },
+          }),
+          h("span", { className: "rep-progress-mid" }),
+        ),
+        h(
+          "div",
+          { className: "rep-progress-labels" },
+          h("span", null, `${rep.start_sec.toFixed(2)}s`),
+          h("span", null, `${rep.mid_sec.toFixed(2)}s mid`),
+          h("span", null, `${rep.end_sec.toFixed(2)}s`),
+        ),
+      ),
+      primaryIssue
+        ? h(
+            "article",
+            { className: `rep-issue-brief ${severityLevel(primaryIssue)}` },
+            h(
+              "div",
+              { className: "rep-issue-brief-head" },
+              h(
+                "div",
+                null,
+                h("span", null, "Issue detail"),
+                h("strong", null, issueTitle(primaryIssue)),
+              ),
+              h(
+                "span",
+                { className: `severity-chip ${severityLevel(primaryIssue)}` },
+                severityText(primaryIssue),
+              ),
+            ),
+            h("p", null, issueEvidence(primaryIssue)),
+            h(
+              "div",
+              { className: "rep-issue-meta" },
+              h("span", null, issueFocus(primaryIssue)),
+              h("span", null, issueClipText(result, primaryIssue, 0)),
+              h("span", null, `confidence ${percent(primaryIssue.evidence?.confidence)}`),
+              repIssues.length > 1
+                ? h("span", null, `+${repIssues.length - 1} more`)
+                : null,
+            ),
+          )
+        : null,
+    );
+  }
 
   return h(
     "aside",
@@ -1000,7 +1183,7 @@ function RepDetailPanel({ report, rep, result, playbackTime }) {
   );
 }
 
-function RepsTab({ result, videoSrc }) {
+function ReplayReviewPanel({ result, videoSrc, className = "" }) {
   const [playbackTime, setPlaybackTime] = useState(0);
   const [selectedRepId, setSelectedRepId] = useState(null);
   const replayVideoRef = useRef(null);
@@ -1010,16 +1193,8 @@ function RepsTab({ result, videoSrc }) {
     setSelectedRepId(null);
   }, [result?.run_id, videoSrc]);
 
-  if (!result)
-    return h(
-      "section",
-      { className: "summary" },
-      h("h2", null, "Rep review"),
-      h("p", null, "Rep segments appear after analysis."),
-    );
   const report = result.report;
   const reps = report.reps?.reps || [];
-  const analysisById = repAnalysisById(report);
   const timedRep = repAtTime(report, playbackTime);
   const selectedRep = reps.find((rep) => rep.rep_id === selectedRepId) || null;
   const activeRep = timedRep || selectedRep || reps[0] || null;
@@ -1035,17 +1210,11 @@ function RepsTab({ result, videoSrc }) {
   }
 
   return h(
-    "section",
-    { className: "summary timeline-panel" },
-    h("h2", null, "Rep replay timeline"),
-    h(
-      "p",
-      null,
-      "Play the set to follow each rep live, or click a rep segment to jump the video to that moment.",
-    ),
+    "div",
+    { className: `replay-review${className ? ` ${className}` : ""}` },
     h(
       "div",
-      { className: "replay-layout" },
+      { className: "replay-main" },
       h(
         "div",
         { className: "replay-video-card" },
@@ -1074,14 +1243,48 @@ function RepsTab({ result, videoSrc }) {
               h("strong", null, "No replay video available"),
               h("span", null, "Upload a clip or use a run with an annotated video to sync the timeline."),
             ),
-        h(RepTimeline, {
-          report,
-          activeRepId: activeRep?.rep_id || null,
-          playbackTime,
-          onRepSelect: playFromRep,
-        }),
       ),
-      h(RepDetailPanel, { report, rep: activeRep, result, playbackTime }),
+      h(RepDetailPanel, {
+        report,
+        rep: activeRep,
+        result,
+        playbackTime,
+        compact: true,
+      }),
+    ),
+    h(
+      "div",
+      { className: "replay-timeline-card" },
+      h(RepTimeline, {
+        report,
+        activeRepId: activeRep?.rep_id || null,
+        playbackTime,
+        onRepSelect: playFromRep,
+      }),
+    ),
+  );
+}
+
+function RepsTab({ result }) {
+  if (!result)
+    return h(
+      "section",
+      { className: "summary" },
+      h("h2", null, "Rep list"),
+      h("p", null, "Rep segments appear after analysis."),
+    );
+  const report = result.report;
+  const reps = report.reps?.reps || [];
+  const analysisById = repAnalysisById(report);
+
+  return h(
+    "section",
+    { className: "summary reps-panel" },
+    h("h2", null, "All reps"),
+    h(
+      "p",
+      null,
+      "A compact pass over every detected rep, with timing, frames, movement score, and issue markers.",
     ),
     reps.length
       ? h(
@@ -1311,74 +1514,6 @@ function IssuesTab({ result }) {
   );
 }
 
-function CoachTab({ result }) {
-  if (!result)
-    return h(
-      "section",
-      { className: "summary" },
-      h("h2", null, "Coach summary"),
-      h("p", null, "Coach notes appear after analysis."),
-    );
-  const summary = result.report.coach_summary;
-  const coachArtifacts = result.report.artifacts || {};
-  const coachSource = coachArtifacts.coach_summary_source || "";
-  const coachProvider = coachArtifacts.coach_summary_provider || "n/a";
-  const coachModel = coachArtifacts.coach_summary_model || "n/a";
-  const verifierBypassed = Boolean(
-    coachArtifacts.coach_summary_verifier_bypassed,
-  );
-  const isFallback = coachSource.startsWith("fallback");
-  const cueNow = summary.top_fixes?.[0] || summary.next_session_plan?.[0] || summary.summary;
-  return h(
-    "section",
-    { className: "summary coach-panel" },
-    h("h2", null, "Coach plan"),
-    h("p", null, summary.summary),
-    h(
-      "div",
-      { className: "coach-meta pill-row" },
-      [
-        ["Provider", coachProvider],
-        ["Model", coachModel],
-        ["Source", coachSource || "n/a"],
-      ].map(([name, value]) => metaChip(`${name}: ${value}`, "", name)),
-    ),
-    isFallback
-      ? h("p", { className: "system-note" }, "A conservative fallback summary was used because the generated summary was unavailable or did not pass verification.")
-      : null,
-    verifierBypassed
-      ? h("p", { className: "system-note warning" }, "Verifier bypass is active, so the model summary is shown even though verification did not pass.")
-      : null,
-    h(
-      "div",
-      { className: "coach-plan-grid" },
-      h(BriefTile, {
-        eyebrow: "Cue now",
-        title: "First rep of the next set",
-        body: cueNow,
-        tone: "volt",
-      }),
-      h(NoteList, { title: "Keep", items: summary.what_looked_good, className: "coach-note" }),
-      h(NoteList, { title: "Fix first", items: summary.top_fixes, className: "coach-note" }),
-      h(NoteList, {
-        title: "Variation vs issue",
-        items: summary.valid_variation_vs_issue,
-        className: "coach-note",
-      }),
-      h(NoteList, {
-        title: "Next session",
-        items: summary.next_session_plan,
-        className: "coach-note",
-      }),
-      h(NoteList, {
-        title: "Confidence notes",
-        items: summary.confidence_notes,
-        className: "coach-note muted",
-      }),
-    ),
-  );
-}
-
 function JsonTab({ result }) {
   return h(
     "pre",
@@ -1422,20 +1557,18 @@ function ArtifactsTab({ result }) {
 
 const reportTabs = [
   ["summary", "Overview"],
-  ["reps", "Timeline"],
+  ["reps", "Reps"],
   ["metrics", "Metrics"],
   ["issues", "Issues"],
-  ["coach", "Coach Plan"],
   ["artifacts", "Artifacts"],
 ];
 
-function ReportPanel({ result, activeTab, onTabChange, videoSrc }) {
+function ReportPanel({ result, activeTab, onTabChange }) {
   const content = {
     summary: h(SummaryTab, { result }),
     metrics: h(MetricsTab, { result }),
-    reps: h(RepsTab, { result, videoSrc }),
+    reps: h(RepsTab, { result }),
     issues: h(IssuesTab, { result }),
-    coach: h(CoachTab, { result }),
     artifacts: h(ArtifactsTab, { result }),
   }[activeTab];
 
@@ -1738,20 +1871,22 @@ function App() {
             ? h("span", { className: "status-pill" }, result.run_id)
             : null,
         ),
-        h(
-          "div",
-          { className: "result-stage" },
-          result?.annotated_video_url
-            ? h("video", {
-                className: "result-video",
-                src: result.annotated_video_url,
-                controls: true,
-              })
-            : h(StageEmpty, null),
-        ),
-        result?.annotated_video_url
-          ? null
-          : h(ProgressPanel, { steps: progressSteps }),
+        result
+          ? h(ReplayReviewPanel, {
+              result,
+              videoSrc: result?.annotated_video_url || previewUrl,
+              className: "review-output-replay",
+            })
+          : h(
+              React.Fragment,
+              null,
+              h(
+                "div",
+                { className: "result-stage" },
+                h(StageEmpty, null),
+              ),
+              h(ProgressPanel, { steps: progressSteps }),
+            ),
         h(ReviewInsights, { result }),
       ),
     ),
@@ -1759,7 +1894,6 @@ function App() {
       result,
       activeTab,
       onTabChange: setActiveTab,
-      videoSrc: result?.annotated_video_url || previewUrl,
     }),
   );
 }
