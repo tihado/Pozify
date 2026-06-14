@@ -71,22 +71,37 @@ requires installing MMPose/MMCV and mapping model keypoints into the shared land
 
 ## Hugging Face ZeroGPU
 
-When this app runs on a Hugging Face Space with ZeroGPU hardware selected, only the compute-heavy
-pose backend and router inference calls are wrapped with `spaces.GPU`. The API and pipeline layer
-stay outside the ZeroGPU boundary so request state, streaming progress queues, and file serving are
-not serialized into the GPU worker.
+When this app runs on a Hugging Face Space with ZeroGPU hardware selected, compute-heavy model
+calls are wrapped with `spaces.GPU`. The API and pipeline layer stay outside the ZeroGPU boundary
+so request state, streaming progress queues, and file serving are not serialized into the GPU
+worker.
 
 The runtime uses these defaults:
 
 - `SPACES_ZERO_GPU=1`: set by Hugging Face ZeroGPU; enables CUDA for the Torch exercise router.
 - `POZIFY_ROUTER_DEVICE`: optional override for router inference, for example `cpu` or `cuda`.
 - `POZIFY_SPACES_GPU_DURATION`: optional `spaces.GPU` duration in seconds, default `120`.
+- `POZIFY_COACH_SUMMARY_PROVIDER`: `hf_inference` by default. Set `local_transformers`
+  to run the coach summary model inside the Space instead of calling Hugging Face Inference.
+- `POZIFY_COACH_SUMMARY_MODEL`: coach model id, default `Qwen/Qwen2.5-7B-Instruct`.
 
 The MediaPipe Tasks backend tries its GPU delegate on ZeroGPU and falls back to CPU if unavailable.
 The older `mp.solutions.pose` path remains CPU-only. The Torch exercise router loads and predicts
 inside its ZeroGPU-wrapped function, so model objects are not pickled across the API boundary.
 The root `packages.txt` installs the native GLES/EGL/OpenGL libraries required by MediaPipe Tasks
 on the Hugging Face runtime.
+
+For a fully local coach on ZeroGPU, set:
+
+```bash
+POZIFY_COACH_SUMMARY_PROVIDER=local_transformers
+POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen2.5-7B-Instruct
+POZIFY_SPACES_GPU_DURATION=300
+```
+
+The 7B model is viable on ZeroGPU `large` for short coach-summary prompts, but the first request can
+be slow while the model downloads and loads. Use a smaller Qwen2.5 Instruct model if queue time or
+cold-start time matters more than output quality.
 
 When running in real mode, the UI summary now shows:
 
