@@ -18,15 +18,6 @@ Read in this order if you want to understand and run the current project:
 
 - [11-overview-demo-video-transcript.md](11-overview-demo-video-transcript.md)
 
-## Planning / Historical Design Notes
-
-These files are useful context, but they are not the source of truth for current runtime commands:
-
-- [90-archive-implementation-plan.md](90-archive-implementation-plan.md)
-- [91-archive-coach-analysis-implementation-plan.md](91-archive-coach-analysis-implementation-plan.md)
-- [92-archive-coach-model-data-plan.md](92-archive-coach-model-data-plan.md)
-- [99-archive-pozify-project-documentation.md](99-archive-pozify-project-documentation.md)
-
 ## Notes
 
 - Current coach-summary cloud runtime default: `Qwen/Qwen3-14B`
