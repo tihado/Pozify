@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import os
 from pathlib import Path
 import shutil
@@ -11,9 +12,11 @@ import modal
 
 
 APP_NAME = "pozify-coach-summary"
-DEFAULT_HF_REPO_ID = "build-small-hackathon/pozify-coach-summary"
+DEFAULT_HF_REPO_NAME = "pozify-coach-summary"
 HF_REPO_ID_ENV = "POZIFY_COACH_SUMMARY_HF_REPO_ID"
+HF_MERGED_REPO_ID_ENV = "POZIFY_COACH_SUMMARY_MERGED_HF_REPO_ID"
 HF_PRIVATE_ENV = "POZIFY_COACH_SUMMARY_HF_PRIVATE"
+RUNTIME_MODEL_ENV = "POZIFY_COACH_SUMMARY_MODEL"
 DATA_ROOT = Path("/data")
 MODEL_ROOT = Path("/models")
 ROOT_DATA = Path("/root/data")
@@ -25,12 +28,17 @@ TRAINING_CONFIG_PATH = MODEL_ROOT / "training_config.json"
 TRAINING_SUMMARY_PATH = MODEL_ROOT / "training_summary.json"
 EVALUATION_PATH = MODEL_ROOT / "evaluation.json"
 HF_UPLOAD_PATH = MODEL_ROOT / "hf_upload.json"
+MERGE_SUMMARY_PATH = MODEL_ROOT / "merge_summary.json"
+HF_MERGED_UPLOAD_PATH = MODEL_ROOT / "hf_merged_upload.json"
 DEFAULT_ADAPTER_DIR = MODEL_ROOT / "adapter"
+DEFAULT_MERGED_DIR = MODEL_ROOT / "merged_model"
 HF_METADATA_FILENAMES = (
     "training_config.json",
     "training_summary.json",
     "evaluation.json",
     "hf_upload.json",
+    "merge_summary.json",
+    "hf_merged_upload.json",
 )
 HF_DATA_FILENAMES = (
     "coach_summary_train.jsonl",
@@ -89,7 +97,13 @@ def _load_local_env_vars(filename: str = ".env") -> dict[str, str]:
 def _hf_secret() -> modal.Secret:
     env_values = _load_local_env_vars()
     secret_payload: dict[str, str] = {}
-    for key in ("HF_TOKEN", HF_REPO_ID_ENV, HF_PRIVATE_ENV):
+    for key in (
+        "HF_TOKEN",
+        HF_REPO_ID_ENV,
+        HF_MERGED_REPO_ID_ENV,
+        HF_PRIVATE_ENV,
+        RUNTIME_MODEL_ENV,
+    ):
         value = os.getenv(key, env_values.get(key))
         if value is not None and str(value).strip():
             secret_payload[key] = str(value).strip()
@@ -133,6 +147,22 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def _env_truthy(value: str | None) -> bool:
     return value is not None and value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _supports_kwarg(callable_obj: Any, name: str) -> bool:
+    try:
+        parameters = inspect.signature(callable_obj).parameters
+    except (TypeError, ValueError):
+        return False
+    return name in parameters
+
+
+def _filtered_kwargs(callable_obj: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    try:
+        parameters = inspect.signature(callable_obj).parameters
+    except (TypeError, ValueError):
+        return dict(kwargs)
+    return {key: value for key, value in kwargs.items() if key in parameters}
 
 
 def _load_config() -> dict[str, Any]:
@@ -232,6 +262,29 @@ def _model_card_text(
             ]
         )
     return "\n".join(lines)
+
+
+def _resolve_repo_id(
+    api: Any,
+    repo_id: str | None,
+    *,
+    env_names: tuple[str, ...] = (HF_REPO_ID_ENV,),
+) -> str:
+    if repo_id:
+        return repo_id
+    for env_name in env_names:
+        configured = os.getenv(env_name)
+        if configured:
+            return configured
+    try:
+        whoami = api.whoami()
+        if isinstance(whoami, dict):
+            username = whoami.get("name") or whoami.get("fullname")
+            if isinstance(username, str) and username.strip():
+                return f"{username.strip()}/{DEFAULT_HF_REPO_NAME}"
+    except Exception:
+        pass
+    return DEFAULT_HF_REPO_NAME
 
 
 def _verifier_inputs_from_evidence(payload: dict[str, Any]) -> tuple[Any, Any, Any, Any, Any]:
@@ -448,27 +501,43 @@ def train(
     )
 
     adapter_dir = MODEL_ROOT / output_subdir
-    trainer = SFTTrainer(
-        model=model,
-        tokenizer=tokenizer,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
-        peft_config=peft_config,
-        dataset_text_field="text",
-        max_seq_length=int(config["max_seq_length"]),
-        args=SFTConfig(
-            output_dir=str(adapter_dir),
-            learning_rate=float(config["learning_rate"]),
-            num_train_epochs=float(config["num_train_epochs"]),
-            per_device_train_batch_size=int(config["per_device_train_batch_size"]),
-            gradient_accumulation_steps=int(config["gradient_accumulation_steps"]),
-            save_strategy="epoch",
-            eval_strategy="epoch",
-            logging_steps=10,
-            bf16=True,
-            report_to=[],
-        ),
-    )
+    sft_config_kwargs = {
+        "output_dir": str(adapter_dir),
+        "learning_rate": float(config["learning_rate"]),
+        "num_train_epochs": float(config["num_train_epochs"]),
+        "per_device_train_batch_size": int(config["per_device_train_batch_size"]),
+        "gradient_accumulation_steps": int(config["gradient_accumulation_steps"]),
+        "save_strategy": "epoch",
+        "logging_steps": 10,
+        "bf16": True,
+        "report_to": [],
+    }
+    if _supports_kwarg(SFTConfig.__init__, "eval_strategy"):
+        sft_config_kwargs["eval_strategy"] = "epoch"
+    elif _supports_kwarg(SFTConfig.__init__, "evaluation_strategy"):
+        sft_config_kwargs["evaluation_strategy"] = "epoch"
+    if _supports_kwarg(SFTConfig.__init__, "max_seq_length"):
+        sft_config_kwargs["max_seq_length"] = int(config["max_seq_length"])
+
+    trainer_kwargs: dict[str, Any] = {
+        "model": model,
+        "train_dataset": train_dataset,
+        "eval_dataset": eval_dataset,
+        "peft_config": peft_config,
+        "args": SFTConfig(**_filtered_kwargs(SFTConfig.__init__, sft_config_kwargs)),
+    }
+    if _supports_kwarg(SFTTrainer.__init__, "processing_class"):
+        trainer_kwargs["processing_class"] = tokenizer
+    elif _supports_kwarg(SFTTrainer.__init__, "tokenizer"):
+        trainer_kwargs["tokenizer"] = tokenizer
+    if _supports_kwarg(SFTTrainer.__init__, "dataset_text_field"):
+        trainer_kwargs["dataset_text_field"] = "text"
+    elif _supports_kwarg(SFTTrainer.__init__, "formatting_func"):
+        trainer_kwargs["formatting_func"] = lambda example: example["text"]
+    if _supports_kwarg(SFTTrainer.__init__, "max_seq_length"):
+        trainer_kwargs["max_seq_length"] = int(config["max_seq_length"])
+
+    trainer = SFTTrainer(**_filtered_kwargs(SFTTrainer.__init__, trainer_kwargs))
     train_result = trainer.train()
     trainer.save_model(str(adapter_dir))
     tokenizer.save_pretrained(str(adapter_dir))
@@ -641,6 +710,57 @@ def _upload_hf_file(
 
 
 @app.function(
+    gpu="A10G",
+    volumes={str(MODEL_ROOT): model_volume},
+    secrets=[_hf_secret()],
+    timeout=90 * 60,
+)
+def merge(
+    adapter_subdir: str = "adapter",
+    merged_subdir: str = "merged_model",
+) -> dict[str, Any]:
+    import torch
+    from peft import PeftModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    config = _load_config()
+    adapter_dir = MODEL_ROOT / adapter_subdir
+    merged_dir = MODEL_ROOT / merged_subdir
+    if not adapter_dir.exists():
+        result = {"ok": False, "error": f"Adapter dir not found: {adapter_dir}"}
+        _write_json(MERGE_SUMMARY_PATH, result)
+        model_volume.commit()
+        return result
+
+    if merged_dir.exists():
+        shutil.rmtree(merged_dir)
+    merged_dir.mkdir(parents=True, exist_ok=True)
+
+    tokenizer = AutoTokenizer.from_pretrained(str(adapter_dir))
+    base_model = AutoModelForCausalLM.from_pretrained(
+        str(config["base_model"]),
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+        low_cpu_mem_usage=True,
+    )
+    model = PeftModel.from_pretrained(base_model, str(adapter_dir))
+    merged_model = model.merge_and_unload()
+    merged_model.save_pretrained(str(merged_dir), safe_serialization=True)
+    tokenizer.save_pretrained(str(merged_dir))
+
+    result = {
+        "ok": True,
+        "base_model": config["base_model"],
+        "adapter_dir": str(adapter_dir),
+        "merged_dir": str(merged_dir),
+        "dtype": "bfloat16",
+    }
+    _write_json(MERGE_SUMMARY_PATH, result)
+    model_volume.commit()
+    return result
+
+
+@app.function(
     volumes={str(MODEL_ROOT): model_volume, str(DATA_ROOT): data_volume},
     secrets=[_hf_secret()],
     timeout=30 * 60,
@@ -651,19 +771,21 @@ def publish_to_hf(
     adapter_subdir: str = "adapter",
 ) -> dict[str, Any]:
     from huggingface_hub import HfApi
+    from huggingface_hub.errors import HfHubHTTPError
 
-    repo_id = repo_id or os.getenv(HF_REPO_ID_ENV) or DEFAULT_HF_REPO_ID
     private = _env_truthy(os.getenv(HF_PRIVATE_ENV)) if private is None else private
     if not os.getenv("HF_TOKEN"):
         return {
             "ok": False,
             "error": "HF_TOKEN is required in the Modal environment or local .env",
-            "repo_id": repo_id,
+            "repo_id": repo_id or os.getenv(HF_REPO_ID_ENV) or DEFAULT_HF_REPO_NAME,
         }
 
     config = _read_json(TRAINING_CONFIG_PATH) if TRAINING_CONFIG_PATH.exists() else {}
     training_summary = _read_json(TRAINING_SUMMARY_PATH) if TRAINING_SUMMARY_PATH.exists() else None
     evaluation = _read_json(EVALUATION_PATH) if EVALUATION_PATH.exists() else None
+    api = HfApi()
+    repo_id = _resolve_repo_id(api, repo_id, env_names=(HF_REPO_ID_ENV,))
     MODEL_CARD_PATH.write_text(
         _model_card_text(
             repo_id=repo_id,
@@ -674,8 +796,23 @@ def publish_to_hf(
         encoding="utf-8",
     )
 
-    api = HfApi()
-    api.create_repo(repo_id=repo_id, repo_type="model", private=private, exist_ok=True)
+    try:
+        api.create_repo(repo_id=repo_id, repo_type="model", private=private, exist_ok=True)
+    except HfHubHTTPError as exc:
+        message = str(exc)
+        guidance = (
+            "Publish failed while creating or accessing the Hugging Face model repo. "
+            "If your token does not have org-level write access, publish to a personal repo id "
+            "such as `<your-username>/pozify-coach-summary`, or set "
+            f"`{HF_REPO_ID_ENV}` in `.env` to a repo you control."
+        )
+        return {
+            "ok": False,
+            "repo_id": repo_id,
+            "private": private,
+            "error": message,
+            "guidance": guidance,
+        }
     uploads = [
         _upload_hf_file(
             api,
@@ -729,6 +866,132 @@ def publish_to_hf(
     return result
 
 
+@app.function(
+    volumes={str(MODEL_ROOT): model_volume, str(DATA_ROOT): data_volume},
+    secrets=[_hf_secret()],
+    timeout=60 * 60,
+)
+def publish_merged_to_hf(
+    repo_id: str | None = None,
+    private: bool | None = None,
+    merged_subdir: str = "merged_model",
+) -> dict[str, Any]:
+    from huggingface_hub import HfApi
+    from huggingface_hub.errors import HfHubHTTPError
+
+    private = _env_truthy(os.getenv(HF_PRIVATE_ENV)) if private is None else private
+    resolved_repo_hint = (
+        repo_id
+        or os.getenv(RUNTIME_MODEL_ENV)
+        or os.getenv(HF_MERGED_REPO_ID_ENV)
+        or DEFAULT_HF_REPO_NAME
+    )
+    if not os.getenv("HF_TOKEN"):
+        return {
+            "ok": False,
+            "error": "HF_TOKEN is required in the Modal environment or local .env",
+            "repo_id": resolved_repo_hint,
+        }
+
+    config = _read_json(TRAINING_CONFIG_PATH) if TRAINING_CONFIG_PATH.exists() else {}
+    training_summary = _read_json(TRAINING_SUMMARY_PATH) if TRAINING_SUMMARY_PATH.exists() else None
+    evaluation = _read_json(EVALUATION_PATH) if EVALUATION_PATH.exists() else None
+    merge_summary = _read_json(MERGE_SUMMARY_PATH) if MERGE_SUMMARY_PATH.exists() else None
+    merged_dir = MODEL_ROOT / merged_subdir
+    if not merged_dir.exists():
+        result = {
+            "ok": False,
+            "error": f"Merged model dir not found: {merged_dir}",
+            "repo_id": resolved_repo_hint,
+        }
+        _write_json(HF_MERGED_UPLOAD_PATH, result)
+        model_volume.commit()
+        return result
+
+    api = HfApi()
+    repo_id = _resolve_repo_id(
+        api,
+        repo_id,
+        env_names=(RUNTIME_MODEL_ENV, HF_MERGED_REPO_ID_ENV, HF_REPO_ID_ENV),
+    )
+
+    MODEL_CARD_PATH.write_text(
+        _model_card_text(
+            repo_id=repo_id,
+            config=config,
+            training_summary=training_summary,
+            evaluation=evaluation,
+        )
+        + "\n## Packaging\n\n- Published as a merged, inference-ready Transformers checkpoint.\n",
+        encoding="utf-8",
+    )
+
+    try:
+        api.create_repo(repo_id=repo_id, repo_type="model", private=private, exist_ok=True)
+    except HfHubHTTPError as exc:
+        message = str(exc)
+        guidance = (
+            "Publish failed while creating or accessing the merged Hugging Face model repo. "
+            "Set `POZIFY_COACH_SUMMARY_MODEL` or pass `--repo-id <your-username>/pozify-coach-summary` "
+            "to publish to a repo your token can write to."
+        )
+        result = {
+            "ok": False,
+            "repo_id": repo_id,
+            "private": private,
+            "error": message,
+            "guidance": guidance,
+        }
+        _write_json(HF_MERGED_UPLOAD_PATH, result)
+        model_volume.commit()
+        return result
+
+    api.upload_folder(
+        repo_id=repo_id,
+        repo_type="model",
+        folder_path=str(merged_dir),
+    )
+
+    uploads = [
+        {
+            "path": str(merged_dir),
+            "path_in_repo": "./",
+            "uploaded": True,
+        },
+        _upload_hf_file(
+            api,
+            repo_id=repo_id,
+            local_path=MODEL_CARD_PATH,
+            path_in_repo="README.md",
+        ),
+    ]
+    uploads.extend(
+        _upload_hf_file(
+            api,
+            repo_id=repo_id,
+            local_path=MODEL_ROOT / filename,
+            path_in_repo=filename,
+        )
+        for filename in (
+            "training_config.json",
+            "training_summary.json",
+            "evaluation.json",
+            "merge_summary.json",
+        )
+    )
+
+    result = {
+        "ok": True,
+        "repo_id": repo_id,
+        "private": private,
+        "merge_summary": merge_summary,
+        "uploads": uploads,
+    }
+    _write_json(HF_MERGED_UPLOAD_PATH, result)
+    model_volume.commit()
+    return result
+
+
 @app.local_entrypoint()
 def main(
     stage: str = "evaluate",
@@ -744,14 +1007,19 @@ def main(
         print(train.remote(epochs=epochs, style_weight=style_weight))
     elif stage == "evaluate":
         print(evaluate.remote(limit=limit))
+    elif stage == "merge":
+        print(merge.remote())
     elif stage == "publish":
         print(publish_to_hf.remote(repo_id=repo_id, private=private))
+    elif stage == "publish-merged":
+        print(publish_merged_to_hf.remote(repo_id=repo_id, private=private))
     elif stage == "all":
         print(prepare_data.remote())
         print(train.remote(epochs=epochs, style_weight=style_weight))
         print(evaluate.remote(limit=limit))
-        print(publish_to_hf.remote(repo_id=repo_id, private=private))
+        print(merge.remote())
+        print(publish_merged_to_hf.remote(repo_id=repo_id, private=private))
     else:
         raise ValueError(
-            "stage must be one of: prepare-data, train, evaluate, publish, all"
+            "stage must be one of: prepare-data, train, evaluate, merge, publish, publish-merged, all"
         )

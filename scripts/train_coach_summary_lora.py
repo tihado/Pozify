@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 DEFAULT_CONFIG = {
-    "base_model": "Qwen/Qwen2.5-7B-Instruct",
+    "base_model": "Qwen/Qwen3-14B",
     "train_file": str(ROOT / "data/sft/coach_summary_train.jsonl"),
     "eval_file": str(ROOT / "data/sft/coach_summary_eval.jsonl"),
     "output_dir": str(ROOT / "models/coach_summary_lora"),
