@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from queue import Queue
+import re
 import shutil
 import sys
 import tempfile
@@ -191,6 +192,12 @@ def _parse_bool_form(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _safe_upload_stem(filename: str) -> str:
+    stem = Path(filename).stem or "upload"
+    safe_stem = re.sub(r"[^A-Za-z0-9_.-]+", "-", stem).strip(".-_")
+    return safe_stem[:48] or "upload"
+
+
 def _run_analysis_pipeline(
     video_path: str | None,
     profile_input: dict[str, Any],
@@ -209,7 +216,12 @@ async def _save_upload(video: UploadFile | None) -> str | None:
     video_path: str | None = None
     if video is not None and video.filename:
         suffix = Path(video.filename).suffix or ".mp4"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video:
+        prefix = f"pozify-{_safe_upload_stem(video.filename)}-"
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            prefix=prefix,
+            suffix=suffix,
+        ) as temp_video:
             shutil.copyfileobj(video.file, temp_video)
             video_path = temp_video.name
     return video_path

@@ -767,6 +767,10 @@ input[type="text"]:focus-visible,
 .report-hero,
 .brief-grid,
 .score-board,
+.metric-chart-hero,
+.metric-trend-grid,
+.rep-quality-card,
+.metric-table-head,
 .rep-timeline,
 .report-notes,
 .coach-spotlight,
@@ -1006,6 +1010,260 @@ input[type="text"]:focus-visible,
 .score-card small,
 .empty-copy {
   color: var(--muted);
+}
+
+.metric-chart-hero {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+  align-items: stretch;
+}
+
+.metric-score-board {
+  margin-top: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metric-radar-card,
+.metric-trend-card,
+.rep-quality-card {
+  min-width: 0;
+  border: 1px solid rgba(245, 242, 232, 0.12);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(140deg, rgba(212, 255, 91, 0.08), transparent 46%),
+    rgba(245, 242, 232, 0.055);
+}
+
+.metric-radar-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.metric-chart-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.metric-chart-head span {
+  display: block;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.metric-chart-head strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--paper);
+  font-size: 1.45rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-chart-head small {
+  color: var(--dim);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.metric-radar-svg,
+.metric-trend-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.metric-radar-svg {
+  max-height: 280px;
+}
+
+.radar-ring {
+  fill: none;
+  stroke: rgba(245, 242, 232, 0.14);
+  stroke-width: 1;
+}
+
+.radar-axis {
+  stroke: rgba(245, 242, 232, 0.12);
+  stroke-width: 1;
+}
+
+.radar-shape {
+  fill: rgba(212, 255, 91, 0.16);
+  stroke: var(--volt);
+  stroke-width: 2.5;
+}
+
+.radar-dot {
+  fill: var(--mint);
+  stroke: #10130f;
+  stroke-width: 2;
+}
+
+.radar-dot.watch {
+  fill: var(--ember);
+}
+
+.radar-dot.risk {
+  fill: var(--danger);
+}
+
+.radar-label {
+  fill: rgba(245, 242, 232, 0.82);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.56rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.radar-label tspan + tspan {
+  fill: var(--volt);
+  font-size: 0.6rem;
+}
+
+.metric-trend-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.metric-trend-card {
+  --chart-line: var(--mint);
+  --chart-fill: rgba(87, 217, 163, 0.15);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.metric-trend-card.stability {
+  --chart-line: var(--ember);
+  --chart-fill: rgba(255, 129, 87, 0.15);
+}
+
+.metric-trend-card.symmetry {
+  --chart-line: var(--volt);
+  --chart-fill: rgba(212, 255, 91, 0.14);
+}
+
+.trend-grid-line {
+  stroke: rgba(245, 242, 232, 0.1);
+  stroke-width: 1;
+}
+
+.trend-area {
+  fill: var(--chart-fill);
+}
+
+.trend-line {
+  fill: none;
+  stroke: var(--chart-line);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.trend-dot {
+  fill: var(--chart-line);
+  stroke: #10130f;
+  stroke-width: 2;
+}
+
+.trend-dot.watch {
+  fill: var(--ember);
+}
+
+.trend-dot.risk {
+  fill: var(--danger);
+}
+
+.trend-axis-label {
+  fill: var(--dim);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+
+.rep-quality-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+}
+
+.rep-quality-strip {
+  display: flex;
+  align-items: end;
+  gap: 7px;
+  min-height: 150px;
+  overflow-x: auto;
+  border: 1px solid rgba(245, 242, 232, 0.1);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 14px 12px 10px;
+  background:
+    linear-gradient(rgba(245, 242, 232, 0.08) 1px, transparent 1px) 0 34% / 100% 33%,
+    rgba(9, 10, 8, 0.22);
+}
+
+.rep-quality-bar {
+  display: grid;
+  align-items: end;
+  justify-items: center;
+  gap: 7px;
+  min-width: 34px;
+  height: 124px;
+}
+
+.rep-quality-bar span {
+  display: block;
+  width: 100%;
+  border-radius: 8px 8px 3px 3px;
+  background: linear-gradient(180deg, var(--volt), var(--mint));
+  box-shadow: 0 0 18px rgba(212, 255, 91, 0.14);
+}
+
+.rep-quality-bar.watch span {
+  background: linear-gradient(180deg, var(--volt), var(--ember));
+}
+
+.rep-quality-bar.risk span {
+  background: linear-gradient(180deg, var(--ember), var(--danger));
+}
+
+.rep-quality-bar strong {
+  color: var(--paper);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-table-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0 8px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.metric-table-head small {
+  color: var(--dim);
+  font-size: inherit;
 }
 
 .rep-timeline {
@@ -2191,6 +2449,7 @@ td {
 @media (max-width: 980px) {
   .brief-grid,
   .score-board,
+  .metric-trend-grid,
   .coach-plan-grid,
   .coach-overview-grid,
   .rep-score-row,
@@ -2205,6 +2464,7 @@ td {
 
   .report-hero,
   .coach-command,
+  .metric-chart-hero,
   .replay-layout,
   .replay-main,
   .review-output-replay .replay-main,
@@ -2242,6 +2502,7 @@ td {
   .form-grid,
   .brief-grid,
   .score-board,
+  .metric-trend-grid,
   .coach-plan-grid,
   .coach-overview-grid,
   .rep-score-row,
