@@ -408,6 +408,7 @@ button {
   position: relative;
   display: grid;
   min-height: 348px;
+  max-height: min(58vh, 420px);
   overflow: hidden;
   border: 1px dashed rgba(212, 255, 91, 0.42);
   border-radius: var(--radius);
@@ -440,11 +441,16 @@ button {
 
 .dropzone-preview,
 .result-video {
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 346px;
+  min-height: 0;
   object-fit: contain;
   background: #090a08;
+}
+
+.dropzone-preview {
+  max-height: min(58vh, 420px);
 }
 
 .dropzone-empty {
@@ -682,6 +688,7 @@ input[type="text"]:focus-visible,
   position: relative;
   display: grid;
   min-height: 470px;
+  max-height: min(68vh, 620px);
   overflow: hidden;
   border: 1px solid rgba(245, 242, 232, 0.12);
   border-radius: var(--radius);
@@ -690,6 +697,10 @@ input[type="text"]:focus-visible,
     #090a08;
   color: var(--paper);
   place-items: center;
+}
+
+.result-video {
+  max-height: min(68vh, 620px);
 }
 
 .result-empty {
@@ -1024,13 +1035,14 @@ td {
 }
 
 .artifact-panel {
+  margin-top: 18px;
   overflow: hidden;
 }
 
 .json-block {
   min-height: 360px;
   max-height: 620px;
-  margin: 0;
+  margin: 18px 0 0;
   overflow: auto;
   padding: 18px;
   color: var(--paper);
