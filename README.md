@@ -46,14 +46,13 @@ The current codebase supports:
 - verifier and conservative fallback summaries
 - Modal training pipelines for both the exercise router and coach-summary model
 
-The current safest cloud runtime for coach summary is:
+The current default coach-summary model is:
 
-- `Qwen/Qwen3-14B`
+- `build-small-hackathon/pozify-coach-summary1`
 
-The current fine-tuned coach-summary Hugging Face repo can be trained, merged, and published, but
-it is not yet cleanly usable through the current Hugging Face serverless `chat_completion` path.
-If you want to use that fine-tuned model today, the simplest path is local merged-model inference
-through `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`.
+Pozify first tries Hugging Face `chat_completion`, then falls back to Hugging Face
+`text_generation` for non-chat model repos. If hosted inference still rejects the repo or returns an
+invalid schema, the app keeps the conservative fallback summary.
 
 ## Product Flow
 
@@ -82,25 +81,25 @@ Supported router labels:
 
 ## Model Stack
 
-| Component | Model or method | Trained here? | Runtime |
-| --- | --- | --- | --- |
-| Pose extraction | MediaPipe Pose Landmarker Lite | No | CPU / MediaPipe delegate |
-| Exercise router | PyTorch BiLSTM over 30-frame pose windows | Yes | Torch |
-| Router baseline | scikit-learn `HistGradientBoostingClassifier` | Yes | CPU fallback/reference |
-| Rep counting | Exercise-specific state machines | No ML | CPU |
-| Issue markers | Transparent rules over per-rep metrics | No ML | CPU |
-| Coach summary | `Qwen/Qwen3-14B` by default | Base model only | HF Inference, local Transformers, or llama.cpp |
-| Coach-summary fine-tune | LoRA / merged checkpoint pipeline on Modal | Yes | Local merged-model path recommended |
-| Verifier | Deterministic safety and grounding checks | No ML | CPU |
+| Component               | Model or method                                          | Trained here?           | Runtime                                        |
+| ----------------------- | -------------------------------------------------------- | ----------------------- | ---------------------------------------------- |
+| Pose extraction         | MediaPipe Pose Landmarker Lite                           | No                      | CPU / MediaPipe delegate                       |
+| Exercise router         | PyTorch BiLSTM over 30-frame pose windows                | Yes                     | Torch                                          |
+| Router baseline         | scikit-learn `HistGradientBoostingClassifier`            | Yes                     | CPU fallback/reference                         |
+| Rep counting            | Exercise-specific state machines                         | No ML                   | CPU                                            |
+| Issue markers           | Transparent rules over per-rep metrics                   | No ML                   | CPU                                            |
+| Coach summary           | `build-small-hackathon/pozify-coach-summary1` by default | Fine-tuned merged model | HF Inference, local Transformers, or llama.cpp |
+| Coach-summary fine-tune | LoRA / merged checkpoint pipeline on Modal               | Yes                     | Local merged-model path recommended            |
+| Verifier                | Deterministic safety and grounding checks                | No ML                   | CPU                                            |
 
 The trained router is intentionally tiny:
 
-| Artifact | Count |
-| --- | ---: |
-| BiLSTM router trainable params | 182,796 |
-| Router input features per frame | 237 |
-| Window length | 30 frames |
-| Output classes | 4 |
+| Artifact                        |     Count |
+| ------------------------------- | --------: |
+| BiLSTM router trainable params  |   182,796 |
+| Router input features per frame |       237 |
+| Window length                   | 30 frames |
+| Output classes                  |         4 |
 
 ## Run The App Locally
 
@@ -146,17 +145,18 @@ uv run python app.py
 
 ## Coach Summary Runtime Options
 
-### 1. Simplest cloud path
+### 1. Fine-tuned coach model
 
-Use the default supported cloud model:
+The app defaults to the fine-tuned coach-summary model:
 
 ```bash
-export POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
+export POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
 uv run python app.py
 ```
 
-This is the easiest path if you want the UI to avoid immediate fallback caused by unsupported custom
-HF serverless routing.
+Pozify tries `chat_completion` first and falls back to `text_generation` when Hugging Face reports
+that the repo is not a chat model. The deterministic fallback summary remains enabled if hosted
+inference is unavailable or the model output fails validation.
 
 ### 2. Use the fine-tuned merged model locally
 
@@ -172,7 +172,16 @@ uv run python app.py
 This is the simplest way to use `build-small-hackathon/pozify-coach-summary1` today without adding a
 dedicated inference endpoint.
 
-### 3. llama.cpp
+### 3. Base cloud model override
+
+If you need the previous base-model runtime:
+
+```bash
+export POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
+uv run python app.py
+```
+
+### 4. llama.cpp
 
 Pozify can send the coach-summary prompt to a local `llama-server` that exposes the
 OpenAI-compatible `/v1/chat/completions` endpoint.
@@ -200,14 +209,14 @@ uv run python app.py
 
 ### Useful environment variables
 
-| Variable | Purpose |
-| --- | --- |
-| `POZIFY_ROUTER_DEVICE` | Override router device, for example `cpu` or `cuda`. |
-| `POZIFY_SPACES_GPU_DURATION` | `spaces.GPU` duration in seconds, default `120`. |
-| `POZIFY_COACH_SUMMARY_PROVIDER` | `hf_inference`, `local_transformers`, or `llama_cpp`. |
-| `POZIFY_COACH_SUMMARY_MODEL` | Coach model id or llama.cpp model alias. |
+| Variable                               | Purpose                                                  |
+| -------------------------------------- | -------------------------------------------------------- |
+| `POZIFY_ROUTER_DEVICE`                 | Override router device, for example `cpu` or `cuda`.     |
+| `POZIFY_SPACES_GPU_DURATION`           | `spaces.GPU` duration in seconds, default `120`.         |
+| `POZIFY_COACH_SUMMARY_PROVIDER`        | `hf_inference`, `local_transformers`, or `llama_cpp`.    |
+| `POZIFY_COACH_SUMMARY_MODEL`           | Coach model id or llama.cpp model alias.                 |
 | `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR` | Prefer a local merged/model directory for coach summary. |
-| `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER` | Keep model output even when verifier fails. |
+| `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER` | Keep model output even when verifier fails.              |
 
 ## Exercise Router Training
 
@@ -262,10 +271,10 @@ uv run modal run scripts/coach_summary_modal.py --stage publish-merged --repo-id
 
 Important runtime note:
 
-- publishing the merged repo does not automatically make it usable through HF serverless
-  `chat_completion`
-- if you want immediate working inference, use `Qwen/Qwen3-14B`
-- if you want to use the fine-tuned model, use `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`
+- the default coach model is `build-small-hackathon/pozify-coach-summary1`
+- Hugging Face hosted inference may still reject a repo or produce invalid JSON, so the
+  conservative fallback summary stays enabled
+- for the most predictable fine-tuned inference path, use `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`
 
 ## Generated Artifacts
 

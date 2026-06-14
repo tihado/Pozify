@@ -20,7 +20,7 @@ Read in this order if you want to understand and run the current project:
 
 ## Notes
 
-- Current coach-summary cloud runtime default: `Qwen/Qwen3-14B`
-- Current fine-tuned coach-summary Hugging Face repo is best used through local merged-model
-  inference, not HF serverless `chat_completion`
+- Current coach-summary runtime default: `build-small-hackathon/pozify-coach-summary1`
+- The Hugging Face provider tries `chat_completion` first, then `text_generation` for non-chat
+  model repos; local merged-model inference remains the most predictable fine-tuned path
 - Current app entrypoint: `uv run python app.py`

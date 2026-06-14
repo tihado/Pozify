@@ -3,7 +3,7 @@
 Status note:
 
 - This report is kept as the hackathon narrative document.
-- Current runtime defaults have moved to `Qwen/Qwen3-14B`.
+- Current runtime defaults use `build-small-hackathon/pozify-coach-summary1`.
 - Current coach-summary training now includes a LoRA/merge/publish pipeline on Modal.
 - For the current operational commands, prefer [../README.md](../README.md) and
   [30-coach-modal-training.md](30-coach-modal-training.md).
@@ -57,7 +57,7 @@ pretending every video is one of the supported movements.
 | Pose extractor | MediaPipe Pose Landmarker Lite | Fast, practical feature extractor for a Gradio Space. |
 | Exercise router | Custom PyTorch BiLSTM | Tiny trainable temporal model over pose windows. |
 | Baseline router | scikit-learn HistGradientBoostingClassifier | Strong baseline over engineered vectors and fallback artifact. |
-| Coach summary | Qwen/Qwen3-14B | Current default cloud runtime for structured JSON explanation. |
+| Coach summary | build-small-hackathon/pozify-coach-summary1 | Current default fine-tuned runtime for structured JSON explanation. |
 | llama.cpp path | Qwen3-14B Instruct GGUF via `llama-server` | Local-first/off-grid coach summary path with GPU offload. |
 
 The original hackathon build trained the exercise router first and used Qwen as a grounded
@@ -212,7 +212,7 @@ logic stay outside the GPU worker. Useful settings:
 
 ```bash
 POZIFY_COACH_SUMMARY_PROVIDER=local_transformers
-POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
+POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
 POZIFY_SPACES_GPU_DURATION=300
 ```
 

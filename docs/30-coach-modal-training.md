@@ -34,8 +34,9 @@ Important limitation:
 
 - Publishing a merged model repo to Hugging Face does **not** currently guarantee that the repo can
   be used through Hugging Face serverless `chat_completion`.
-- In the current codebase, the safest cloud runtime remains `Qwen/Qwen3-14B`.
-- The simplest way to use the fine-tuned merged model today is local inference through
+- The current codebase defaults to `build-small-hackathon/pozify-coach-summary1` and falls back
+  from `chat_completion` to `text_generation` for non-chat model repos.
+- The most predictable fine-tuned path remains local inference through
   `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`.
 
 ## Requirements
@@ -142,10 +143,10 @@ The Modal model volume stores:
 
 ## Current Runtime Usage
 
-### Safest cloud runtime now
+### Default fine-tuned runtime
 
 ```bash
-export POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
+export POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
 uv run python app.py
 ```
 
@@ -160,15 +161,16 @@ export POZIFY_COACH_SUMMARY_ADAPTER_ID=build-small-hackathon/pozify-coach-summar
 uv run python app.py
 ```
 
-### Not recommended right now
+### Previous base-model runtime
 
-Pointing app runtime directly at the merged Hugging Face repo through:
+If you need to force the previous base model:
 
 ```bash
-export POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
+export POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
 ```
 
-This may still fall back because HF serverless currently rejects that repo as “not a chat model”.
+The fine-tuned model may still fall back if hosted inference is unavailable or returns invalid JSON,
+so the deterministic fallback summary remains part of the runtime path.
 
 ## Evaluation Meaning
 

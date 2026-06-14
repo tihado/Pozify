@@ -67,7 +67,43 @@ class SlmProviderTests(unittest.TestCase):
             model = get_coach_summary_model()
 
         self.assertIsInstance(model, HFInferenceCoachSummaryModel)
-        self.assertEqual(model.model, "Qwen/Qwen3-14B")
+        self.assertEqual(model.model, "build-small-hackathon/pozify-coach-summary1")
+
+    def test_hf_inference_falls_back_to_text_generation_for_non_chat_model(self) -> None:
+        class _TextGenerationClient:
+            def __init__(self) -> None:
+                self.text_generation_kwargs = None
+
+            def chat_completion(self, **_kwargs):
+                raise RuntimeError("not a chat model")
+
+            def text_generation(self, prompt: str, **kwargs):
+                self.text_generation_kwargs = {"prompt": prompt, **kwargs}
+                return '{"summary":"ok"}'
+
+        client = _TextGenerationClient()
+        model = HFInferenceCoachSummaryModel(
+            model="build-small-hackathon/pozify-coach-summary1",
+            max_tokens=123,
+            temperature=0.2,
+        )
+        model._client = client
+
+        generation = model.generate_summary("coach prompt")
+
+        self.assertEqual(generation.provider, "hf_inference")
+        self.assertEqual(generation.model, "build-small-hackathon/pozify-coach-summary1")
+        self.assertEqual(generation.text, '{"summary":"ok"}')
+        self.assertEqual(
+            client.text_generation_kwargs,
+            {
+                "prompt": "coach prompt",
+                "model": "build-small-hackathon/pozify-coach-summary1",
+                "max_new_tokens": 123,
+                "temperature": 0.2,
+                "return_full_text": False,
+            },
+        )
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ LLAMA_CPP_BASE_URL_ENV = "POZIFY_LLAMA_CPP_BASE_URL"
 LLAMA_CPP_TIMEOUT_ENV = "POZIFY_LLAMA_CPP_TIMEOUT"
 
 DEFAULT_PROVIDER = "hf_inference"
-DEFAULT_MODEL = "Qwen/Qwen3-14B"
+DEFAULT_MODEL = "build-small-hackathon/pozify-coach-summary1"
 DEFAULT_LLAMA_CPP_BASE_URL = "http://127.0.0.1:8080"
 LOCAL_TRANSFORMERS_PROVIDER = "local_transformers"
 LOCAL_TRANSFORMERS_ALIASES = {LOCAL_TRANSFORMERS_PROVIDER, "local", "transformers"}
@@ -97,52 +97,83 @@ class HFInferenceCoachSummaryModel:
         self._client = InferenceClient(api_key=self.token)
         return self._client
 
+    def _generate_with_chat_completion(
+        self,
+        client: Any,
+        prompt: str,
+    ) -> CoachSummaryGeneration:
+        response = client.chat_completion(
+            model=self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Return JSON only.",
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+        )
+        choices = getattr(response, "choices", None) or []
+        if not choices:
+            raise RuntimeError("Hugging Face inference returned no choices")
+        message = getattr(choices[0], "message", None)
+        text = getattr(message, "content", None)
+        if not isinstance(text, str) or not text.strip():
+            raise RuntimeError("Hugging Face inference returned an empty message")
+        return CoachSummaryGeneration(
+            text=text,
+            provider="hf_inference",
+            model=self.model,
+        )
+
+    def _generate_with_text_generation(
+        self,
+        client: Any,
+        prompt: str,
+    ) -> CoachSummaryGeneration:
+        text = client.text_generation(
+            prompt,
+            model=self.model,
+            max_new_tokens=self.max_tokens,
+            temperature=self.temperature,
+            return_full_text=False,
+        )
+        if not isinstance(text, str) or not text.strip():
+            raise RuntimeError("Hugging Face text generation returned empty output")
+        return CoachSummaryGeneration(
+            text=text,
+            provider="hf_inference",
+            model=self.model,
+        )
+
     def generate_summary(self, prompt: str) -> CoachSummaryGeneration:
         client = self._client_instance()
+        chat_error: Exception | None = None
         if hasattr(client, "chat_completion"):
-            response = client.chat_completion(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Return JSON only.",
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    },
-                ],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-            )
-            choices = getattr(response, "choices", None) or []
-            if not choices:
-                raise RuntimeError("Hugging Face inference returned no choices")
-            message = getattr(choices[0], "message", None)
-            text = getattr(message, "content", None)
-            if not isinstance(text, str) or not text.strip():
-                raise RuntimeError("Hugging Face inference returned an empty message")
-            return CoachSummaryGeneration(
-                text=text,
-                provider="hf_inference",
-                model=self.model,
-            )
+            try:
+                return self._generate_with_chat_completion(client, prompt)
+            except Exception as exc:
+                chat_error = exc
 
         if hasattr(client, "text_generation"):
-            text = client.text_generation(
-                prompt,
-                model=self.model,
-                max_new_tokens=self.max_tokens,
-                temperature=self.temperature,
-                return_full_text=False,
-            )
-            if not isinstance(text, str) or not text.strip():
-                raise RuntimeError("Hugging Face text generation returned empty output")
-            return CoachSummaryGeneration(
-                text=text,
-                provider="hf_inference",
-                model=self.model,
-            )
+            try:
+                return self._generate_with_text_generation(client, prompt)
+            except Exception as exc:
+                if chat_error is None:
+                    raise
+                raise RuntimeError(
+                    "Hugging Face chat completion and text generation both failed: "
+                    f"chat={chat_error}; text_generation={exc}"
+                ) from exc
+
+        if chat_error is not None:
+            raise RuntimeError(
+                f"Hugging Face chat completion failed and text generation is unavailable: {chat_error}"
+            ) from chat_error
 
         raise RuntimeError("No supported Hugging Face inference method is available")
 
