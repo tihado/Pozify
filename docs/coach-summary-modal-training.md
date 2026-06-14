@@ -25,17 +25,15 @@ It follows the same stage pattern as the exercise-router Modal pipeline:
 modal setup
 ```
 
-3. Make sure the Hugging Face token is available to Modal via a secret named:
-
-```text
-huggingface-secret
-```
-
-It should contain:
+3. Make sure your local `.env` contains:
 
 - `HF_TOKEN`
 - optional `POZIFY_COACH_SUMMARY_HF_REPO_ID`
 - optional `POZIFY_COACH_SUMMARY_HF_PRIVATE=1`
+
+The script uses `modal.Secret.from_dotenv()`, so for local `modal run ...` usage you do not need to pre-create a hosted Modal secret just to run `prepare-data` or `train`.
+
+If you prefer a hosted secret for team/shared environments, you can still create one manually in Modal and adapt the script later.
 
 ## Data Inputs
 

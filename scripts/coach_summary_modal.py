@@ -65,6 +65,37 @@ model_volume = modal.Volume.from_name(
 )
 
 
+def _load_local_env_vars(filename: str = ".env") -> dict[str, str]:
+    candidates = (
+        Path.cwd() / filename,
+        Path(__file__).resolve().parents[1] / filename,
+    )
+    values: dict[str, str] = {}
+    for path in candidates:
+        if not path.is_file():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            key = key.strip()
+            if not key:
+                continue
+            values[key] = value.strip().strip("'").strip('"')
+    return values
+
+
+def _hf_secret() -> modal.Secret:
+    env_values = _load_local_env_vars()
+    secret_payload: dict[str, str] = {}
+    for key in ("HF_TOKEN", HF_REPO_ID_ENV, HF_PRIVATE_ENV):
+        value = os.getenv(key, env_values.get(key))
+        if value is not None and str(value).strip():
+            secret_payload[key] = str(value).strip()
+    return modal.Secret.from_dict(secret_payload)
+
+
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -337,6 +368,7 @@ def prepare_data() -> dict[str, Any]:
 @app.function(
     gpu="A10G",
     volumes={str(DATA_ROOT): data_volume, str(MODEL_ROOT): model_volume},
+    secrets=[_hf_secret()],
     timeout=3 * 60 * 60,
 )
 def train(
@@ -423,13 +455,13 @@ def train(
         eval_dataset=eval_dataset,
         peft_config=peft_config,
         dataset_text_field="text",
+        max_seq_length=int(config["max_seq_length"]),
         args=SFTConfig(
             output_dir=str(adapter_dir),
             learning_rate=float(config["learning_rate"]),
             num_train_epochs=float(config["num_train_epochs"]),
             per_device_train_batch_size=int(config["per_device_train_batch_size"]),
             gradient_accumulation_steps=int(config["gradient_accumulation_steps"]),
-            max_seq_length=int(config["max_seq_length"]),
             save_strategy="epoch",
             eval_strategy="epoch",
             logging_steps=10,
@@ -464,6 +496,7 @@ def train(
 @app.function(
     gpu="A10G",
     volumes={str(DATA_ROOT): data_volume, str(MODEL_ROOT): model_volume},
+    secrets=[_hf_secret()],
     timeout=90 * 60,
 )
 def evaluate(
@@ -609,7 +642,7 @@ def _upload_hf_file(
 
 @app.function(
     volumes={str(MODEL_ROOT): model_volume, str(DATA_ROOT): data_volume},
-    secrets=[modal.Secret.from_name("huggingface-secret")],
+    secrets=[_hf_secret()],
     timeout=30 * 60,
 )
 def publish_to_hf(
