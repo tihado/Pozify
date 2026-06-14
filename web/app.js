@@ -36,13 +36,13 @@ function Field({ labelText, children, full = false }) {
   );
 }
 
-function SelectField({ labelText, value, onChange, options }) {
+function SelectField({ labelText, value, onChange, options, name }) {
   return h(
     Field,
     { labelText },
     h(
       "select",
-      { value, onChange: (event) => onChange(event.target.value) },
+      { name, value, onChange: (event) => onChange(event.target.value) },
       options.map((option) =>
         h("option", { key: option, value: option }, label(option)),
       ),
@@ -60,6 +60,39 @@ function formatValue(value) {
 
 function percent(value) {
   return typeof value === "number" ? `${Math.round(value * 100)}%` : "n/a";
+}
+
+function KineticFigure({ compact = false }) {
+  const imageUrl = compact
+    ? "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&fm=jpg&w=900&q=84"
+    : "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&fm=jpg&w=1100&q=84";
+  return h(
+    "div",
+    { className: `kinetic-photo${compact ? " compact" : ""}`, "aria-hidden": "true" },
+    h("img", {
+      alt: "",
+      className: "motion-photo",
+      draggable: false,
+      src: imageUrl,
+    }),
+    h("span", { className: "photo-vignette" }),
+    h("span", { className: "photo-scanline" }),
+  );
+}
+
+function SignalStack() {
+  return h(
+    "div",
+    { className: "signal-stack", "aria-label": "Analysis pipeline" },
+    ["Video QC", "Pose Map", "Rep Count", "Coach Notes"].map((item, index) =>
+      h(
+        "div",
+        { className: "signal-row", key: item },
+        h("span", null, `0${index + 1}`),
+        h("strong", null, item),
+      ),
+    ),
+  );
 }
 
 const runningProgressSteps = [
@@ -232,6 +265,20 @@ function ProgressPanel({ steps }) {
           h("span", null, step.text),
         ),
       ),
+    ),
+  );
+}
+
+function StageEmpty() {
+  return h(
+    "div",
+    { className: "result-empty" },
+    h(KineticFigure, { compact: true }),
+    h("strong", null, "Your annotated replay will land here"),
+    h(
+      "span",
+      null,
+      "Upload a set and Pozify will paint the movement path, rep timing, and coaching moments on top of the video.",
     ),
   );
 }
@@ -775,8 +822,10 @@ function ReportPanel({ result, activeTab, onTabChange }) {
           "button",
           {
             className: `tab${activeTab === key ? " active" : ""}`,
+            "aria-selected": activeTab === key,
             key,
             onClick: () => onTabChange(key),
+            role: "tab",
             type: "button",
           },
           name,
@@ -806,10 +855,8 @@ function App() {
   const [goal, setGoal] = useState("beginner_practice");
   const [experience, setExperience] = useState("beginner");
   const [exercise, setExercise] = useState("auto");
-  const [variation, setVariation] = useState("");
   const [equipment, setEquipment] = useState("bodyweight");
   const [limitations, setLimitations] = useState([]);
-  const [bypassVerifier, setBypassVerifier] = useState(false);
   const [result, setResult] = useState(null);
   const [activeTab, setActiveTab] = useState("summary");
   const [status, setStatus] = useState("idle");
@@ -854,10 +901,10 @@ function App() {
     payload.append("goal", goal);
     payload.append("experience_level", experience);
     payload.append("intended_exercise", exercise);
-    payload.append("intended_variation", variation);
+    payload.append("intended_variation", "");
     payload.append("limitations", JSON.stringify(limitations));
     payload.append("equipment", equipment);
-    payload.append("bypass_verifier", String(bypassVerifier));
+    payload.append("bypass_verifier", "false");
 
     try {
       const response = await fetch("/api/analyze/stream", {
@@ -893,7 +940,7 @@ function App() {
     "main",
     { className: "app" },
     h(
-      "section",
+      "header",
       { className: "hero" },
       h(
         "div",
@@ -905,27 +952,40 @@ function App() {
         ),
         h("h1", null, "Pozify"),
         h("p", null, config.description),
+        h(
+          "div",
+          { className: "hero-actions", "aria-label": "Demo strengths" },
+          h("span", null, "Realtime stream"),
+          h("span", null, "Annotated replay"),
+          h("span", null, "Grounded coach notes"),
+        ),
       ),
       h(
-        "div",
-        { className: "hero-metrics", "aria-label": "Pipeline highlights" },
+        "aside",
+        { className: "hero-lab", "aria-label": "Motion analysis preview" },
+        h(KineticFigure, null),
+        h(SignalStack, null),
         h(
           "div",
-          { className: "metric" },
-          h("strong", null, "17"),
-          h("span", null, "pose landmarks"),
-        ),
-        h(
-          "div",
-          { className: "metric" },
-          h("strong", null, "60s"),
-          h("span", null, "clip ceiling"),
-        ),
-        h(
-          "div",
-          { className: "metric" },
-          h("strong", null, "JSON"),
-          h("span", null, "audit trail"),
+          { className: "hero-metrics", "aria-label": "Pipeline highlights" },
+          h(
+            "div",
+            { className: "metric" },
+            h("strong", null, "17"),
+            h("span", null, "pose landmarks"),
+          ),
+          h(
+            "div",
+            { className: "metric" },
+            h("strong", null, "60s"),
+            h("span", null, "clip ceiling"),
+          ),
+          h(
+            "div",
+            { className: "metric" },
+            h("strong", null, "JSON"),
+            h("span", null, "audit trail"),
+          ),
         ),
       ),
     ),
@@ -947,13 +1007,14 @@ function App() {
           h(
             "span",
             { className: "status-pill" },
-            status === "running" ? "Analyzing" : "Ready",
+            status === "running" ? "Analyzing" : result ? "Complete" : "Ready",
           ),
         ),
         h(
           "label",
           { className: "dropzone" },
           h("input", {
+            name: "video",
             type: "file",
             accept: "video/*",
             onChange: (event) => setFile(event.target.files?.[0] || null),
@@ -968,8 +1029,8 @@ function App() {
                 "span",
                 { className: "dropzone-empty" },
                 h("span", { className: "upload-icon" }, "↑"),
-                h("strong", null, "Drop video here"),
-                h("span", null, "or click to upload"),
+                h("strong", null, "Drop a workout clip"),
+                h("span", null, "or click to upload an MP4, MOV, or WebM file"),
               ),
         ),
         h(
@@ -977,38 +1038,32 @@ function App() {
           { className: "form-grid" },
           h(SelectField, {
             labelText: "Goal",
+            name: "goal",
             value: goal,
             onChange: setGoal,
             options: config.goals,
           }),
           h(SelectField, {
             labelText: "Experience",
+            name: "experience_level",
             value: experience,
             onChange: setExperience,
             options: config.experience_levels,
           }),
           h(SelectField, {
             labelText: "Exercise",
+            name: "intended_exercise",
             value: exercise,
             onChange: setExercise,
             options: config.exercises,
           }),
           h(SelectField, {
             labelText: "Equipment",
+            name: "equipment",
             value: equipment,
             onChange: setEquipment,
             options: config.equipment,
           }),
-          h(
-            Field,
-            { labelText: "Variation", full: true },
-            h("input", {
-              type: "text",
-              value: variation,
-              placeholder: "Optional, e.g. wide_grip_push_up",
-              onChange: (event) => setVariation(event.target.value),
-            }),
-          ),
           h(
             "div",
             { className: "field full" },
@@ -1021,6 +1076,7 @@ function App() {
                   "label",
                   { className: "check-chip", key: item },
                   h("input", {
+                    name: "limitations",
                     type: "checkbox",
                     checked: limitations.includes(item),
                     onChange: () => toggleLimitation(item),
@@ -1030,26 +1086,11 @@ function App() {
               ),
             ),
           ),
-          h(
-            "div",
-            { className: "field full" },
-            h("span", { className: "label" }, "Advanced"),
-            h(
-              "label",
-              { className: "check-chip" },
-              h("input", {
-                type: "checkbox",
-                checked: bypassVerifier,
-                onChange: () => setBypassVerifier((current) => !current),
-              }),
-              h("span", null, "Bypass verifier and show model output"),
-            ),
-          ),
         ),
         h(
           "button",
-          { className: "primary", disabled: status === "running" },
-          status === "running" ? "Analyzing..." : "Analyze Form",
+          { className: "primary", disabled: status === "running", type: "submit" },
+          status === "running" ? "Analyzing…" : "Analyze Form",
         ),
         error ? h("div", { className: "error" }, error) : null,
       ),
@@ -1078,12 +1119,7 @@ function App() {
                 src: result.annotated_video_url,
                 controls: true,
               })
-            : h(
-                "div",
-                { className: "result-empty" },
-                h("strong", null, "Awaiting scan"),
-                h("span", null, "The annotated video appears after analysis."),
-              ),
+            : h(StageEmpty, null),
         ),
         result?.annotated_video_url
           ? null
