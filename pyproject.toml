@@ -1,7 +1,7 @@
 [project]
 name = "pozify"
 version = "0.1.0"
-description = "Gradio base app for Pozify with mocked pipeline steps and explicit data contracts."
+description = "Small-model Gradio app for video-based workout form review."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

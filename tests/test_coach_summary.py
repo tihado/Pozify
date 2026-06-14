@@ -202,6 +202,53 @@ class CoachSummaryTests(unittest.TestCase):
             token=None,
         )
 
+    def test_get_coach_summary_model_can_use_llama_cpp_provider(self) -> None:
+        class _Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self) -> bytes:
+                return (
+                    b'{"choices":[{"message":{"content":"{\\"summary\\":\\"ok\\"}"}}]}'
+                )
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "POZIFY_COACH_SUMMARY_PROVIDER": "llama_cpp",
+                    "POZIFY_COACH_SUMMARY_MODEL": "local-qwen2.5-7b-gguf",
+                    "POZIFY_COACH_SUMMARY_MAX_TOKENS": "321",
+                    "POZIFY_COACH_SUMMARY_TEMPERATURE": "0",
+                    "POZIFY_LLAMA_CPP_BASE_URL": "http://127.0.0.1:8090",
+                    "POZIFY_LLAMA_CPP_TIMEOUT": "9",
+                },
+                clear=True,
+            ),
+            patch.object(slm_providers, "load_local_env"),
+            patch.object(
+                slm_providers.urllib.request,
+                "urlopen",
+                return_value=_Response(),
+            ) as urlopen,
+        ):
+            provider = slm_providers.get_coach_summary_model()
+
+            self.assertIsNotNone(provider)
+            generation = provider.generate_summary("coach prompt")
+
+        self.assertEqual(generation.provider, "llama_cpp")
+        self.assertEqual(generation.model, "local-qwen2.5-7b-gguf")
+        self.assertEqual(generation.text, '{"summary":"ok"}')
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "http://127.0.0.1:8090/v1/chat/completions")
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], 9.0)
+        self.assertIn(b'"max_tokens": 321', request.data)
+        self.assertIn(b'"content": "coach prompt"', request.data)
+
     def test_card_retrieval_is_deterministic_and_grounded(self) -> None:
         cards = retrieve_cards(
             profile=_profile(),
