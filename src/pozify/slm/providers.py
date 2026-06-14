@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
 from typing import Any, Protocol
+import urllib.error
+import urllib.request
 
 from pozify.env import env_truthy, load_local_env
 from pozify.hf_spaces import default_spaces_gpu_duration, spaces_gpu
@@ -14,11 +17,22 @@ DISABLE_REMOTE_ENV = "POZIFY_COACH_SUMMARY_DISABLE_REMOTE"
 MAX_TOKENS_ENV = "POZIFY_COACH_SUMMARY_MAX_TOKENS"
 TEMPERATURE_ENV = "POZIFY_COACH_SUMMARY_TEMPERATURE"
 HF_TOKEN_ENV = "HF_TOKEN"
+LLAMA_CPP_BASE_URL_ENV = "POZIFY_LLAMA_CPP_BASE_URL"
+LLAMA_CPP_TIMEOUT_ENV = "POZIFY_LLAMA_CPP_TIMEOUT"
 
 DEFAULT_PROVIDER = "hf_inference"
 DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+DEFAULT_LLAMA_CPP_BASE_URL = "http://127.0.0.1:8080"
 LOCAL_TRANSFORMERS_PROVIDER = "local_transformers"
 LOCAL_TRANSFORMERS_ALIASES = {LOCAL_TRANSFORMERS_PROVIDER, "local", "transformers"}
+LLAMA_CPP_PROVIDER = "llama_cpp"
+LLAMA_CPP_ALIASES = {
+    LLAMA_CPP_PROVIDER,
+    "llamacpp",
+    "llama-cpp",
+    "llama_server",
+    "llama-server",
+}
 
 _LOCAL_TRANSFORMERS_CACHE: dict[str, tuple[Any, Any]] = {}
 
@@ -257,6 +271,76 @@ class LocalTransformersCoachSummaryModel:
         )
 
 
+class LlamaCppServerCoachSummaryModel:
+    def __init__(
+        self,
+        *,
+        model: str = DEFAULT_MODEL,
+        base_url: str = DEFAULT_LLAMA_CPP_BASE_URL,
+        max_tokens: int = 700,
+        temperature: float = 0.1,
+        timeout_sec: float = 120.0,
+    ) -> None:
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.timeout_sec = timeout_sec
+
+    def generate_summary(self, prompt: str) -> CoachSummaryGeneration:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Return JSON only.",
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "stream": False,
+        }
+        request = urllib.request.Request(
+            f"{self.base_url}/v1/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
+                raw_response = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"llama.cpp server returned HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"llama.cpp server is unavailable: {exc.reason}") from exc
+
+        try:
+            response_payload = json.loads(raw_response)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("llama.cpp server returned invalid JSON") from exc
+
+        choices = response_payload.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise RuntimeError("llama.cpp server returned no choices")
+        first_choice = choices[0]
+        if not isinstance(first_choice, dict):
+            raise RuntimeError("llama.cpp server returned an invalid choice")
+        message = first_choice.get("message")
+        text = message.get("content") if isinstance(message, dict) else first_choice.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise RuntimeError("llama.cpp server returned an empty message")
+        return CoachSummaryGeneration(
+            text=text,
+            provider=LLAMA_CPP_PROVIDER,
+            model=self.model,
+        )
+
+
 def get_coach_summary_model() -> CoachSummaryModel | None:
     load_local_env()
 
@@ -277,6 +361,15 @@ def get_coach_summary_model() -> CoachSummaryModel | None:
             max_tokens=_env_int(MAX_TOKENS_ENV, 700),
             temperature=_env_float(TEMPERATURE_ENV, 0.1),
             token=os.getenv(HF_TOKEN_ENV),
+        )
+
+    if provider in LLAMA_CPP_ALIASES:
+        return LlamaCppServerCoachSummaryModel(
+            model=os.getenv(MODEL_ENV, DEFAULT_MODEL),
+            base_url=os.getenv(LLAMA_CPP_BASE_URL_ENV, DEFAULT_LLAMA_CPP_BASE_URL),
+            max_tokens=_env_int(MAX_TOKENS_ENV, 700),
+            temperature=_env_float(TEMPERATURE_ENV, 0.1),
+            timeout_sec=_env_float(LLAMA_CPP_TIMEOUT_ENV, 120.0),
         )
 
     if env_truthy(os.getenv(DISABLE_REMOTE_ENV)):

@@ -8,25 +8,183 @@ sdk_version: "6.17.3"
 python_version: "3.10"
 app_file: app.py
 fullWidth: true
-short_description: Video-based workout form review app.
+short_description: Small-model workout form review from short videos.
 tags:
   - gradio
   - computer-vision
   - pose-estimation
   - fitness
   - video-analysis
+  - llama-cpp
 ---
 
 # Pozify
 
-Pozify is a Gradio + uv base project for a video-based workout form review app.
+Pozify is a Gradio Space that turns a short workout clip into a structured form-review report:
+exercise detected, reps counted, issues localized by timestamp, an annotated video, and grounded
+coach feedback.
 
-The current implementation contains the full application pipeline, step inputs/outputs, and JSON data contracts. Uploaded videos use real video QC, MediaPipe pose extraction, and real rep segmentation by default; no-video/demo runs still use mock pose data.
+The project was built for the
+[Hugging Face Build Small Hackathon](https://huggingface.co/build-small-hackathon). It uses small,
+replaceable models instead of a giant end-to-end model: pose extraction, a tiny trained exercise
+router, rule-based rep and issue analysis, and a small instruction model for the final explanation.
 
-## Run The App
+## Hackathon Fit
+
+| Requirement or badge | Pozify status |
+| -------------------- | ------------- |
+| Gradio app on HF Space | Uses `gr.Server` with a custom static frontend and FastAPI routes in `app.py`. |
+| Small models only | Main coach model is Qwen2.5-7B Instruct; trained router has 182,796 params. Total is far below the 32B cap. |
+| Well-Tuned | The exercise router was trained on pose-window data and published as `build-small-hackathon/pozify-exercise-router`. |
+| Modal-powered | Dataset ingestion, pose feature extraction, training, evaluation, and Hub publishing run on Modal. |
+| Llama Champion | Coach summary can run through `llama-server` with `POZIFY_COACH_SUMMARY_PROVIDER=llama_cpp`. |
+| Field Notes | See [docs/build-small-hackathon-report.md](docs/build-small-hackathon-report.md). |
+| Off-Brand | The app uses a custom frontend under `web/`, not the default Gradio blocks layout. |
+
+## What It Does
+
+```text
+user profile + input video
+-> video quality check
+-> MediaPipe pose landmarks
+-> pose cleaning and normalization
+-> trained exercise router
+-> exercise-specific rep counter
+-> per-rep metrics and variation detection
+-> frame-level issue markers
+-> annotated video renderer
+-> grounded coach summary
+-> verifier
+-> final report
+```
+
+Supported router labels:
+
+- `squat`
+- `push_up`
+- `shoulder_press`
+- `unknown`
+
+Pozify is not a medical device. It does not diagnose injuries, claim injury prevention, or replace a
+trainer, clinician, or physical therapist.
+
+## Model Stack
+
+| Component | Model or method | Trained here? | Runtime |
+| --------- | --------------- | ------------- | ------- |
+| Pose extraction | MediaPipe Pose Landmarker Lite | No | CPU, MediaPipe Tasks GPU delegate when available |
+| Exercise router | PyTorch BiLSTM over 30-frame pose windows | Yes | Torch CPU/CUDA, HF ZeroGPU wrapped |
+| Router baseline | scikit-learn `HistGradientBoostingClassifier` | Yes | CPU fallback/reference |
+| Rep counting | Exercise-specific state machines over pose signals | No ML | CPU |
+| Issue markers | Transparent rules over per-rep metrics | No ML | CPU |
+| Coach summary | `Qwen/Qwen2.5-7B-Instruct` by default | No | HF Inference, local Transformers, or llama.cpp |
+| Verifier | Deterministic checks over generated JSON | No ML | CPU |
+
+The trained router is intentionally tiny:
+
+| Artifact | Count |
+| -------- | ----: |
+| BiLSTM router trainable params | 182,796 |
+| Router input features per frame | 237 |
+| Window length | 30 frames |
+| Output classes | 4 |
+
+## Training Data
+
+The router starts from
+[`RickyRiccio/Real_Time_Exercise_Recognition_Dataset`](https://huggingface.co/datasets/RickyRiccio/Real_Time_Exercise_Recognition_Dataset).
+Supported folders are normalized to `squat`, `push_up`, and `shoulder_press`. Unsupported classes,
+such as curl variations, are mapped to `unknown` so the router learns when to reject clips rather
+than force a supported label.
+
+Latest Modal training run:
+
+| Metric | Value |
+| ------ | ----: |
+| Feature examples | 134 |
+| Pose windows | 2,224 |
+| Failed feature extractions | 0 |
+| Squat windows | 659 |
+| Push-up windows | 287 |
+| Shoulder press windows | 646 |
+| Unknown windows | 632 |
+
+Feature extraction converts each video to cleaned pose windows:
+
+- normalized COCO-17 landmarks with visibility
+- knee, hip, elbow, and shoulder angles
+- relative distances such as hand width over shoulder width
+- frame deltas and velocities
+- 30-frame tensors for the BiLSTM
+- aggregated vectors for the scikit-learn baseline
+
+Custom negative examples can be uploaded to the Modal data volume at `/data/raw/custom_unknown/`.
+The collection protocol is documented in
+[docs/custom-data-collection-guide.md](docs/custom-data-collection-guide.md).
+
+## Training On Modal
+
+Modal is used because the expensive work is bursty: download videos, run pose extraction over a
+dataset, train/evaluate, publish artifacts, then shut down.
+
+```bash
+uv run modal setup
+uv run modal run scripts/exercise_router_modal.py --stage ingest
+uv run modal run scripts/exercise_router_modal.py --stage features
+uv run modal run scripts/exercise_router_modal.py --stage train-baseline
+uv run modal run scripts/exercise_router_modal.py --stage train-temporal
+uv run modal run scripts/exercise_router_modal.py --stage evaluate
+```
+
+Or run the full flow:
+
+```bash
+uv run modal run scripts/exercise_router_modal.py \
+  --stage all \
+  --repo-id build-small-hackathon/pozify-exercise-router
+```
+
+Modal resources:
+
+- `pozify-router-data`: raw dataset, manifests, extracted pose-window feature caches.
+- `pozify-router-models`: `baseline.joblib`, `temporal.pt`, metrics, selection JSON, HF upload log.
+- `train_temporal`: runs on Modal `A10` GPU.
+
+Temporal router hyperparameters:
+
+| Hyperparameter | Value |
+| -------------- | ----: |
+| Architecture | BiLSTM |
+| Epochs | 73 |
+| Hidden units | 73 |
+| Dropout | 0.2174 |
+| Learning rate | 0.0004 |
+| Batch size | 54 |
+| Final training loss | 0.0003 |
+
+Current evaluation summary:
+
+| Model | Artifact | Accuracy | Unknown rejection rate |
+| ----- | -------- | -------: | ---------------------: |
+| Baseline | `baseline.joblib` | 0.9982 | 0.9968 |
+| BiLSTM temporal | `temporal.pt` | 0.9969 | 0.9968 |
+
+The active runtime artifact is `temporal.pt`; the baseline is retained for comparison and fallback.
+Full metrics are in
+[docs/exercise-router-training-report.md](docs/exercise-router-training-report.md).
+
+## Run The App Locally
+
+Install dependencies with `uv`, then start the app:
 
 ```bash
 uv run python app.py
+```
+
+The app listens at:
+
+```text
+http://127.0.0.1:7860
 ```
 
 You can also run:
@@ -35,141 +193,148 @@ You can also run:
 uv run gradio app.py
 ```
 
-The app runs at `http://127.0.0.1:7860` by default.
+Real video mode is the default when a video path is provided. No-video demo runs use mock pose data
+so the app can still produce deterministic JSON artifacts.
 
-The pipeline runs with real pose extraction by default when a video path is provided. No-video runs
-default to mock mode. To force mock mode in scripts, call `run_pipeline(..., mock=True)` or set:
+Force mock mode:
 
 ```bash
 POZIFY_MOCK_MODE=1 uv run python app.py
 ```
 
-To force the end-to-end app to use real video QC, MediaPipe pose extraction, real rep segmentation,
-and annotated video rendering even when `POZIFY_MOCK_MODE` is set elsewhere, set:
+Force real mode:
 
 ```bash
 POZIFY_MOCK_MODE=0 uv run python app.py
 ```
 
-On current Python versions the pose step uses MediaPipe Tasks and downloads
-`pose_landmarker_lite.task` into `/tmp/pozify-models` on first use. To use a pre-downloaded model, set:
+MediaPipe downloads `pose_landmarker_lite.task` to `/tmp/pozify-models` on first use. To provide a
+pre-downloaded task file:
 
 ```bash
-POZIFY_MEDIAPIPE_POSE_MODEL=/path/to/pose_landmarker_lite.task POZIFY_MOCK_MODE=0 uv run python app.py
+POZIFY_MEDIAPIPE_POSE_MODEL=/path/to/pose_landmarker_lite.task \
+POZIFY_MOCK_MODE=0 \
+uv run python app.py
 ```
 
-The pose extractor is selected through a backend interface. MediaPipe is the default real backend:
+## Router Artifacts From Hugging Face
 
-```bash
-POZIFY_POSE_BACKEND=mediapipe POZIFY_MOCK_MODE=0 uv run python app.py
-```
-
-Backend implementations live in `src/pozify/steps/pose_backends/` and return the same
-`PoseDetection` shape, so downstream steps do not depend on a specific model library. A reserved
-`mmpose` backend class is included as the integration point for OpenMMLab MMPose; implementing it
-requires installing MMPose/MMCV and mapping model keypoints into the shared landmark dictionary.
-
-## Hugging Face ZeroGPU
-
-When this app runs on a Hugging Face Space with ZeroGPU hardware selected, compute-heavy model
-calls are wrapped with `spaces.GPU`. The API and pipeline layer stay outside the ZeroGPU boundary
-so request state, streaming progress queues, and file serving are not serialized into the GPU
-worker.
-
-The runtime uses these defaults:
-
-- `SPACES_ZERO_GPU=1`: set by Hugging Face ZeroGPU; enables CUDA for the Torch exercise router.
-- `POZIFY_ROUTER_DEVICE`: optional override for router inference, for example `cpu` or `cuda`.
-- `POZIFY_SPACES_GPU_DURATION`: optional `spaces.GPU` duration in seconds, default `120`.
-- `POZIFY_COACH_SUMMARY_PROVIDER`: `hf_inference` by default. Set `local_transformers`
-  to run the coach summary model inside the Space instead of calling Hugging Face Inference.
-- `POZIFY_COACH_SUMMARY_MODEL`: coach model id, default `Qwen/Qwen2.5-7B-Instruct`.
-
-The MediaPipe Tasks backend tries its GPU delegate on ZeroGPU and falls back to CPU if unavailable.
-The older `mp.solutions.pose` path remains CPU-only. The Torch exercise router loads and predicts
-inside its ZeroGPU-wrapped function, so model objects are not pickled across the API boundary.
-The root `packages.txt` installs the native GLES/EGL/OpenGL libraries required by MediaPipe Tasks
-on the Hugging Face runtime.
-
-For a fully local coach on ZeroGPU, set:
-
-```bash
-POZIFY_COACH_SUMMARY_PROVIDER=local_transformers
-POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen2.5-7B-Instruct
-POZIFY_SPACES_GPU_DURATION=300
-```
-
-The 7B model is viable on ZeroGPU `large` for short coach-summary prompts, but the first request can
-be slow while the model downloads and loads. Use a smaller Qwen2.5 Instruct model if queue time or
-cold-start time matters more than output quality.
-
-When running in real mode, the UI summary now shows:
-
-- `Analysis mode`: `mock` or `real`
-- `Pose source`: for example `mock_pose` or `mediapipe_pose`
-
-## Pipeline
+Pozify loads the router from this model repo by default:
 
 ```text
-user profile + input video
--> video QC
--> 17-point 3D pose landmarker
--> pose cleaning and normalization
--> exercise classifier
--> exercise-specific rep counter
--> per-rep analysis
--> variation detection
--> frame-level issue markers
--> annotated video renderer
--> grounded coach summary
--> verifier
--> final report
+build-small-hackathon/pozify-exercise-router
 ```
 
-After classification, the pipeline creates one object for the detected exercise class with the video
-manifest, cleaned pose sequence, and user profile. Rep counting, rep analysis, variation detection,
-and issue marking then run as methods on that exercise object.
+Override the repo:
 
-## Project Structure
+```bash
+export POZIFY_ROUTER_HF_REPO_ID=owner/other-pozify-router
+```
+
+Disable Hub loading and use local files only:
+
+```bash
+export POZIFY_ROUTER_DISABLE_HF=1
+```
+
+Local active artifacts should live under:
 
 ```text
-app.py
-src/pozify/
-  contracts.py
-  pipeline.py
-  artifacts.py
-  exercises/
-    push_up/
-      strategy.py
-      analyzer.py
-      issue_markers.py
-    squat/
-      strategy.py
-      analyzer.py
-      issue_markers.py
-    shoulder_press/
-      strategy.py
-      analyzer.py
-      issue_markers.py
-    shared/
-      analyzer.py
-      issue_marker.py
-      rep_counter.py
-  steps/
-    video_qc.py
-    pose_landmarker.py
-    pose_cleaning.py
-    exercise_classifier.py
-    annotated_renderer.py
-    coach_summary.py
-    verifier.py
-docs/
-  pozify-project-documentation.md
+models/exercise_router/active/
+  router_selection.json
+  temporal.pt
+  baseline.joblib        # optional fallback/reference
+  router.joblib          # optional baseline alias
 ```
+
+Publishing details are in
+[docs/huggingface-router-release.md](docs/huggingface-router-release.md), and the model card draft is
+in [docs/huggingface-router-model-card.md](docs/huggingface-router-model-card.md).
+
+## GPU Runtime
+
+### Hugging Face ZeroGPU
+
+On a ZeroGPU Space, compute-heavy calls are wrapped with `spaces.GPU`. Hugging Face sets
+`SPACES_ZERO_GPU=1`; Pozify then defaults the Torch router to CUDA.
+
+Useful environment variables:
+
+| Variable | Purpose |
+| -------- | ------- |
+| `POZIFY_ROUTER_DEVICE` | Override router device, for example `cpu` or `cuda`. |
+| `POZIFY_SPACES_GPU_DURATION` | `spaces.GPU` duration in seconds, default `120`. |
+| `POZIFY_COACH_SUMMARY_PROVIDER` | `hf_inference`, `local_transformers`, or `llama_cpp`. |
+| `POZIFY_COACH_SUMMARY_MODEL` | Coach model id or llama.cpp model alias. |
+
+Fully local Transformers coach mode on ZeroGPU:
+
+```bash
+POZIFY_COACH_SUMMARY_PROVIDER=local_transformers \
+POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen2.5-7B-Instruct \
+POZIFY_SPACES_GPU_DURATION=300 \
+uv run python app.py
+```
+
+### Local CUDA
+
+If Torch sees a CUDA GPU:
+
+```bash
+POZIFY_ROUTER_DEVICE=cuda \
+POZIFY_COACH_SUMMARY_PROVIDER=local_transformers \
+POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen2.5-7B-Instruct \
+uv run python app.py
+```
+
+The router is small enough that CPU inference is usually fine; GPU is more useful for local
+Transformers coach generation.
+
+### llama.cpp
+
+Pozify can send the coach-summary prompt to a local `llama-server` that exposes the
+OpenAI-compatible `/v1/chat/completions` endpoint. This is the path for running the coach model as a
+GGUF with llama.cpp.
+
+Start a llama.cpp server with GPU offload. Use either a local GGUF file:
+
+```bash
+llama-server \
+  --model /path/to/qwen2.5-7b-instruct-q4_k_m.gguf \
+  --ctx-size 4096 \
+  --n-gpu-layers 99 \
+  --host 127.0.0.1 \
+  --port 8080
+```
+
+Or let llama.cpp download a GGUF repo from Hugging Face:
+
+```bash
+llama-server \
+  --hf-repo owner/qwen2.5-7b-instruct-gguf:Q4_K_M \
+  --ctx-size 4096 \
+  --n-gpu-layers 99 \
+  --host 127.0.0.1 \
+  --port 8080
+```
+
+Then run Pozify against that server:
+
+```bash
+POZIFY_COACH_SUMMARY_PROVIDER=llama_cpp \
+POZIFY_COACH_SUMMARY_MODEL=local-qwen2.5-7b-gguf \
+POZIFY_LLAMA_CPP_BASE_URL=http://127.0.0.1:8080 \
+POZIFY_COACH_SUMMARY_MAX_TOKENS=700 \
+uv run python app.py
+```
+
+Use `--n-gpu-layers all` or a lower layer count if your llama.cpp build supports it and your GPU
+memory budget requires it. On CPU-only machines, omit `--n-gpu-layers`; generation will be slower but
+the app still works.
 
 ## Generated Artifacts
 
-Each analysis run creates a folder under `runs/<run_id>/`:
+Each run creates `runs/<run_id>/` with:
 
 - `manifest.json`
 - `user_profile.json`
@@ -186,165 +351,70 @@ Each analysis run creates a folder under `runs/<run_id>/`:
 - `verification.json`
 - `final_report.json`
 
-`manifest.json` indexes the generated artifacts in pipeline order and records whether the run used
-mock mode. JSON artifacts are validated before they are written, including required fields, supported
-enum values, score ranges, frame/timestamp ordering, and final report shape.
+JSON artifacts are validated before they are written. The final report records the analysis mode,
+pose source, coach provider, coach model, verifier status, and downloadable artifact URLs.
 
-`video_manifest.json` is produced from OpenCV metadata and sampled-frame quality checks. It includes
-FPS, duration, frame count, sampled frame count, resolution, codec/container when available,
-brightness, blur score, warning labels, and `analysis_allowed`.
-
-Video quality warning labels:
-
-- `too_short`
-- `too_long`
-- `too_dark`
-- `too_blurry`
-- `fps_too_low`
-- `resolution_too_low`
-- `video_decode_failed`
-
-Decode failures set `analysis_allowed=false`; the Gradio UI surfaces capture guidance instead of
-coach-style feedback when analysis is blocked.
-
-`rep_debug.json` stores the selected segmentation signal, thresholds, detected extrema, and accepted
-rep segments for debugging rep counting.
-
-`annotated_video.mp4` is produced when the renderer can decode the input video. It overlays pose
-landmarks, skeleton connections, rep count, and rep boundary labels on top of the source video.
-
-## Replacing Mock Steps
-
-Each step lives in `src/pozify/steps/` and exposes a `run(...)` function.
-
-## Adding Exercises
-
-Supported exercise metadata is centralized in `src/pozify/exercise_catalog.py`. To add a new
-exercise, add one `ExerciseSpec` with:
-
-- `key` and `display_name`
-- `default_variation` and confidence
-- `metric_factory` for legacy/mock fallback metadata
-- optional `variation_hints`, default `not_issues`, and `mock_issue`
-
-The Gradio dropdown, profile validation, variation detector, rep analysis, and issue marker read from
-this catalog, so new exercises do not require changing each step just to become selectable. Real
-exercise-specific code lives under `src/pozify/exercises/<exercise>/`:
-
-- `strategy.py`: rep-counting signal, variation logic, and exercise strategy wiring
-- `analyzer.py`: per-rep metrics
-- `issue_markers.py`: frame-level issue rules
-
-Shared analyzer and issue marker primitives live under `src/pozify/exercises/shared/`.
-
-Recommended replacement order:
-
-1. `video_qc.py`: read real video metadata with OpenCV.
-2. `pose_backends/`: add or refine pose model adapters such as MediaPipe or MMPose.
-3. `exercise_classifier.py`: load the exercise router model.
-4. `exercises/<exercise>/strategy.py`: implement exercise-specific rep signals and variation logic.
-5. `exercises/<exercise>/analyzer.py`: compute per-rep metrics.
-6. `exercises/<exercise>/issue_markers.py`: compute real issue scores and intervals.
-7. `annotated_renderer.py`: render skeleton overlays and issue highlights.
-8. `coach_summary.py`: call the selected small language model with retrieved knowledge cards.
-
-## Exercise Router Training
-
-Issue 4 adds a real exercise router path for `squat`, `push_up`, `shoulder_press`, and `unknown`.
-Runtime inference stays local: `src/pozify/steps/exercise_classifier.py` looks for a trained artifact
-under `models/exercise_router/active/` and falls back to `unknown` with `fallback_required=true`
-when no model is present or confidence is too low.
-
-Modal is used for dataset ingestion, batch feature extraction, and training:
-
-```bash
-uv run modal setup
-uv run modal run scripts/exercise_router_modal.py --stage ingest
-uv run modal run scripts/exercise_router_modal.py --stage features
-uv run modal run scripts/exercise_router_modal.py --stage train-baseline
-uv run modal run scripts/exercise_router_modal.py --stage train-temporal
-uv run modal run scripts/exercise_router_modal.py --stage evaluate
-```
-
-The `evaluate` and `all` stages automatically publish the selected router artifacts to Hugging Face
-after evaluation. Set `POZIFY_ROUTER_HF_REPO_ID` and `HF_TOKEN` in `.env` or pass a repo explicitly:
-
-```bash
-uv run modal run scripts/exercise_router_modal.py --stage all --repo-id owner/pozify-exercise-router
-uv run modal run scripts/exercise_router_modal.py --stage publish --repo-id owner/pozify-exercise-router
-```
-
-The latest training metrics and selected-artifact result are recorded in
-[docs/exercise-router-training-report.md](docs/exercise-router-training-report.md).
-Custom data collection is documented in
-[docs/custom-data-collection-guide.md](docs/custom-data-collection-guide.md). Demo clips are listed
-in [demo/README.md](demo/README.md).
-
-The Modal app uses:
-
-- `pozify-router-data` for raw videos, manifests, and feature caches.
-- `pozify-router-models` for `baseline.joblib`, `temporal.pt`, `evaluation.json`, and the selected
-  router artifact.
-
-The baseline trains a scikit-learn model over engineered window vectors. The temporal stage trains a
-compact BiLSTM over 30-frame feature tensors on a Modal A10 GPU and writes `temporal.pt` plus
-`temporal_metrics.json`. Its default hyperparameters follow the Riccio exercise-classification paper:
-73 hidden units, 0.2174 dropout, 0.0004 learning rate, batch size 54, and 73 epochs
-(https://arxiv.org/abs/2411.11548). Evaluation scores every available trained artifact, writes
-per-model metrics into `evaluation.json`, records the active artifact in `router_selection.json`,
-and publishes artifacts to Hugging Face when the `evaluate` or `all` stage completes.
-The current selection policy prefers the BiLSTM temporal model when it is available; the baseline is
-kept as a fallback/reference artifact.
-
-Download the selected artifact and its selection file after evaluation, then place them under:
+## Project Structure
 
 ```text
-models/exercise_router/active/
+app.py
+web/
+  index.html
+  app.js
+  report.js
+  styles.css
+src/pozify/
+  pipeline.py
+  contracts.py
+  steps/
+    video_qc.py
+    pose_landmarker.py
+    exercise_classifier.py
+    annotated_renderer.py
+    coach_summary.py
+    verifier.py
+  ml/
+    exercise_router_features.py
+    exercise_router_temporal.py
+    exercise_router_inference.py
+  slm/
+    providers.py
+    prompting.py
+  exercises/
+    squat/
+    push_up/
+    shoulder_press/
+scripts/
+  exercise_router_modal.py
+  upload_exercise_router_to_hf.py
+docs/
+  build-small-hackathon-report.md
+  exercise-router-training-report.md
+  huggingface-router-release.md
+  custom-data-collection-guide.md
 ```
-
-For the active BiLSTM router this directory should contain `temporal.pt` and
-`router_selection.json`. Keep `router.joblib` only when you want the baseline artifact available for
-comparison or fallback.
-
-To publish and load the router from Hugging Face, use the setup notes in
-[docs/huggingface-router-release.md](docs/huggingface-router-release.md). The draft model card is in
-[docs/huggingface-router-model-card.md](docs/huggingface-router-model-card.md). Runtime loading uses
-`build-small-hackathon/pozify-exercise-router` by default; set `POZIFY_ROUTER_HF_REPO_ID` only to
-override it.
-
-Custom unknown clips can be uploaded into the data volume at `/data/raw/custom_unknown/` before the
-`features` stage. Use consented clips only; useful unknown examples include idle standing, walking
-into frame, setup motion, stretching, bad camera angle, and partial/unsupported reps. Unsupported
-classes from the Riccio dataset, such as bicep curl, are mapped to `unknown`.
 
 ## Development Checks
 
 ```bash
-uv run python -m unittest discover -s tests
-python3 -m py_compile app.py src/pozify/*.py src/pozify/steps/*.py src/pozify/exercises/*.py src/pozify/exercises/*/*.py
-uv run python -c "import app; from pozify.pipeline import run_pipeline; print('ok')"
-```
-
-The unit tests run the full mocked pipeline explicitly, then assert deterministic top-level keys for
-each JSON artifact.
-
-## Git Hooks
-
-Install Lefthook once per clone:
-
-```bash
-lefthook install
-```
-
-The configured `pre-commit` and `pre-push` hooks run:
-
-```bash
 uv run ruff check
+uv run python -m compileall src scripts tests app.py
 uv run python -m unittest discover -s tests
 ```
 
-To run the real MediaPipe smoke test against `tests/fixtures/sample.MOV`, opt in explicitly:
+Run the real MediaPipe fixture smoke test only when the fixture is available:
 
 ```bash
-POZIFY_RUN_REAL_POSE_TESTS=1 uv run python -m unittest tests.test_pose_steps.PoseStepTests.test_real_sample_mov_extracts_pose_landmarks
+POZIFY_RUN_REAL_POSE_TESTS=1 \
+uv run python -m unittest tests.test_pose_steps.PoseStepTests.test_real_sample_mov_extracts_pose_landmarks
 ```
+
+## Notes And Limits
+
+- Router metrics are from the current Modal feature cache, not a broad production benchmark.
+- The app depends on full-body framing and usable pose extraction.
+- Unsupported or low-confidence clips should route to `unknown` instead of receiving fabricated
+  coaching.
+- Qwen is prompted and verified; it is not fine-tuned in this project.
+- More held-out videos, camera angles, body types, and custom unknown clips are needed before using
+  Pozify as a robust training product.
