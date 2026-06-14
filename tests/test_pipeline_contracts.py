@@ -180,6 +180,14 @@ class PipelineContractTests(unittest.TestCase):
                 )
                 self.assertIn("issue_clip_paths", payload["artifacts"])
                 self.assertIsInstance(payload["artifacts"]["issue_clip_paths"], list)
+                self.assertIn("knowledge_card_pack_paths", payload["artifacts"])
+                self.assertIsInstance(
+                    payload["artifacts"]["knowledge_card_pack_paths"], list
+                )
+                self.assertIn("knowledge_external_cards_loaded", payload["artifacts"])
+                self.assertIn(
+                    "knowledge_external_cards_retrieved", payload["artifacts"]
+                )
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertTrue(manifest["mock_mode"])

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import sys
@@ -22,8 +23,12 @@ from pozify.contracts import (
     Variation,
 )
 from pozify.env import load_local_env
-from pozify.knowledge_cards import retrieve_cards
 import pozify.slm.providers as slm_providers
+from pozify.knowledge_cards import (
+    clear_catalog_cache,
+    retrieve_cards,
+    retrieve_cards_with_metadata,
+)
 from pozify.steps import coach_summary, coach_summary_fallback, verifier
 
 
@@ -145,6 +150,9 @@ def _issues() -> IssueMarkers:
 
 
 class CoachSummaryTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        clear_catalog_cache()
+
     def test_load_local_env_populates_missing_values(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             env_path = Path(temp_dir) / ".env"
@@ -268,6 +276,61 @@ class CoachSummaryTests(unittest.TestCase):
             ],
         )
         self.assertIn("safety:no_diagnosis", card_ids)
+
+    def test_retrieval_metadata_reports_external_card_usage(self) -> None:
+        retrieval = retrieve_cards_with_metadata(
+            profile=_profile(),
+            classification=_classification(),
+            variation=_variation(),
+            issues=_issues(),
+        )
+
+        self.assertTrue(retrieval.loaded_pack_paths)
+        self.assertGreaterEqual(retrieval.external_cards_loaded, 1)
+        self.assertGreaterEqual(retrieval.external_cards_retrieved, 1)
+
+    def test_external_pack_can_override_known_card_by_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pack_path = Path(temp_dir) / "override-pack.json"
+            pack_path.write_text(
+                json.dumps(
+                    {
+                        "cards": [
+                            {
+                                "card_id": "exercise:push_up",
+                                "card_type": "exercise",
+                                "labels": ["push_up"],
+                                "title": "Push-up Override",
+                                "summary": "Override summary for deterministic retrieval testing.",
+                                "evidence_rules": [
+                                    "Use only structured evidence."
+                                ],
+                                "coaching_points": [
+                                    "Return the overridden card."
+                                ]
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {"POZIFY_KNOWLEDGE_CARD_PACKS": str(pack_path)},
+                clear=False,
+            ):
+                clear_catalog_cache()
+                cards = retrieve_cards(
+                    profile=_profile(),
+                    classification=_classification(),
+                    variation=_variation(),
+                    issues=_issues(),
+                )
+
+            push_up_card = next(card for card in cards if card.card_id == "exercise:push_up")
+            self.assertEqual(push_up_card.title, "Push-up Override")
+            self.assertEqual(push_up_card.source_kind, "external")
+            self.assertEqual(push_up_card.source_path, str(pack_path.resolve()))
 
     def test_coach_summary_falls_back_when_model_fails(self) -> None:
         cards = retrieve_cards(
