@@ -107,7 +107,7 @@ class _MediaPipeTasksPoseAdapter:
         return self._mp.tasks.vision.PoseLandmarker.create_from_options(options)
 
     def _preferred_delegate(self) -> Any:
-        configured_delegate = os.getenv(MEDIAPIPE_DELEGATE_ENV, "auto").strip().lower()
+        configured_delegate = os.getenv(MEDIAPIPE_DELEGATE_ENV, "cpu").strip().lower()
         if configured_delegate == "cpu":
             return self._cpu_delegate()
 

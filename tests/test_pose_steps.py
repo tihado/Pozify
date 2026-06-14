@@ -319,10 +319,20 @@ class MediaPipeTasksDelegateTests(unittest.TestCase):
         ):
             self.assertEqual(adapter._preferred_delegate(), "cpu")
 
-    def test_mediapipe_tasks_prefers_gpu_inside_zero_gpu(self) -> None:
+    def test_mediapipe_tasks_defaults_to_cpu_inside_zero_gpu(self) -> None:
         adapter = self._adapter(self._fake_mediapipe())
 
         with patch.dict(os.environ, {"SPACES_ZERO_GPU": "1"}, clear=True):
+            self.assertEqual(adapter._preferred_delegate(), "cpu")
+
+    def test_mediapipe_tasks_auto_prefers_gpu_inside_zero_gpu(self) -> None:
+        adapter = self._adapter(self._fake_mediapipe())
+
+        with patch.dict(
+            os.environ,
+            {"SPACES_ZERO_GPU": "1", "POZIFY_MEDIAPIPE_DELEGATE": "auto"},
+            clear=True,
+        ):
             self.assertEqual(adapter._preferred_delegate(), "gpu")
 
     def test_mediapipe_delegate_env_can_force_gpu(self) -> None:
