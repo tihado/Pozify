@@ -362,6 +362,51 @@ class CoachSummaryTests(unittest.TestCase):
             evidence["priority_cues"],
         )
 
+    def test_prompt_evidence_omits_raw_issue_interval_evidence(self) -> None:
+        issues = IssueMarkers(
+            issues=[
+                IssueMarker(
+                    rep_id=4,
+                    issue="shallow_depth",
+                    severity=1.0,
+                    start_frame=239,
+                    end_frame=242,
+                    start_sec=7.967,
+                    end_sec=8.067,
+                    affected_joints=["left_hip", "right_hip"],
+                    evidence={
+                        "mean_metric_value": 0.0,
+                        "peak_frame": 0,
+                        "supporting_frames": [239, 240, 241],
+                        "threshold": 0.93,
+                    },
+                )
+            ]
+        )
+        cards = retrieve_cards(
+            profile=_profile(),
+            classification=_classification(),
+            variation=_variation(),
+            issues=issues,
+        )
+
+        evidence = build_summary_evidence(
+            profile=_profile(),
+            classification=_classification(),
+            reps=_reps(),
+            analysis=_analysis(),
+            variation=_variation(),
+            issues=issues,
+            cards=cards,
+        )
+        interval = evidence["issue_summary"]["top_issue_intervals"][0]
+
+        self.assertNotIn("evidence", interval)
+        self.assertEqual(
+            interval["evidence_keys"],
+            ["mean_metric_value", "peak_frame", "supporting_frames", "threshold"],
+        )
+
     def test_prioritized_coaching_points_prefers_issue_and_context_cards(self) -> None:
         cards = retrieve_cards(
             profile=_profile(),

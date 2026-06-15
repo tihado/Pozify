@@ -12,10 +12,35 @@ from pozify.slm.providers import (  # noqa: E402
     get_coach_summary_model,
     HFInferenceCoachSummaryModel,
     LocalTransformersCoachSummaryModel,
+    _tokenize_local_chat,
 )
 
 
 class SlmProviderTests(unittest.TestCase):
+    def test_local_chat_tokenization_preserves_prompt_tail_on_truncation(self) -> None:
+        class _Tokenizer:
+            truncation_side = "right"
+
+            def __init__(self) -> None:
+                self.seen_truncation_side = None
+
+            def apply_chat_template(self, messages, **kwargs):
+                del messages, kwargs
+                self.seen_truncation_side = self.truncation_side
+                return {"input_ids": [[1, 2, 3]]}
+
+        tokenizer = _Tokenizer()
+
+        result = _tokenize_local_chat(
+            tokenizer=tokenizer,
+            messages=[{"role": "user", "content": "coach prompt"}],
+            max_input_tokens=8,
+        )
+
+        self.assertEqual(result, {"input_ids": [[1, 2, 3]]})
+        self.assertEqual(tokenizer.seen_truncation_side, "left")
+        self.assertEqual(tokenizer.truncation_side, "right")
+
     def test_returns_local_transformers_model_when_local_dir_is_set(self) -> None:
         with patch.dict(
             os.environ,

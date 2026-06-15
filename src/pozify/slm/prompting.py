@@ -82,16 +82,7 @@ def build_summary_evidence(
     for issue in sorted(issues.issues, key=lambda item: item.severity, reverse=True):
         issue_counts[issue.issue] = issue_counts.get(issue.issue, 0) + 1
         if len(top_issue_intervals) < 3:
-            top_issue_intervals.append(
-                {
-                    "issue": issue.issue,
-                    "rep_id": issue.rep_id,
-                    "severity": round(issue.severity, 3),
-                    "start_sec": round(issue.start_sec, 3),
-                    "end_sec": round(issue.end_sec, 3),
-                    "evidence": issue.evidence,
-                }
-            )
+            top_issue_intervals.append(_compact_issue(issue))
 
     sorted_issues = sorted(issues.issues, key=lambda item: item.severity, reverse=True)
     rep_metrics = [_compact_rep_metric(item) for item in analysis.items[:4]]
@@ -179,11 +170,25 @@ def build_coach_summary_prompt(
             "Return JSON only. No markdown fences. No extra commentary.",
         ],
     }
+    final_contract = {
+        "final_output_contract": {
+            "required_keys": list(expected_schema.keys()),
+            "array_keys": [
+                key for key, value in expected_schema.items() if isinstance(value, list)
+            ],
+            "rules": [
+                "Return exactly one JSON object.",
+                "Do not echo evidence JSON.",
+                "Do not add text before or after the JSON object.",
+            ],
+        }
+    }
     json_dump_kwargs = {"ensure_ascii": False, "separators": (",", ":")}
     return "\n\n".join(
         [
             json.dumps(instructions, **json_dump_kwargs),
             json.dumps(evidence, **json_dump_kwargs),
+            json.dumps(final_contract, **json_dump_kwargs),
             'Output the final coach summary JSON object now. Start with {"summary":',
         ]
     )

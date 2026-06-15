@@ -31,125 +31,44 @@ tags:
 
 # Pozify
 
-Pozify is a small-model workout form coach for people who want to train at home but still need
-clear, trustworthy feedback. It is built for users who avoid gyms because they are far away, too
-crowded, intimidating, or too expensive to replace with a 1:1 personal trainer.
+Pozify is a small-model workout form coach for people who want to train at home but still need clear,
+trustworthy feedback. A user uploads a short exercise video, adds basic training context, and gets a
+structured form-review report with rep counts, movement notes, annotated video, and a grounded coach
+summary.
 
-Upload a short workout video and Pozify turns it into a structured, grounded form-review report:
-
-- exercise detected
-- reps counted
-- variation and issue markers
-- annotated video and clips
-- grounded coach summary
-- verifier-backed confidence and safety notes
-
-The app is built as a small-model pipeline, not a giant end-to-end model. It combines transparent
-pose analysis, a trained exercise router, exercise-specific rule logic, deterministic knowledge-card
-retrieval, and a small summary model.
+Pozify is built for users who avoid gyms because they are far away, too crowded, intimidating, or too
+expensive to replace with a private trainer. It gives them a second set of eyes without pretending to
+be a clinician or a full personal coach.
 
 Pozify is not a medical device. It does not diagnose injuries, claim injury prevention, or replace a
 qualified trainer, clinician, or physical therapist.
 
 ![Pozify product](https://tihado.com/images/pozify.webp)
 
-## Hackathon Snapshot
-
-- Track: `Backyard AI`
-- Core user impact: affordable at-home workout feedback without needing a gym or private coach
-- Submission format: `Gradio Space`
-- Build Small fit: every runtime model used by Pozify is under the `32B` cap
-- Demo video: `ADD_PUBLIC_DEMO_LINK`
-- Social post: `ADD_PUBLIC_SOCIAL_POST_LINK`
-- Hugging Face Space: [build-small-hackathon/Pozify](https://huggingface.co/spaces/build-small-hackathon/Pozify)
-- Team repo: [tihado/Pozify](https://github.com/tihado/Pozify)
-- Default coach-summary model: `build-small-hackathon/pozify-coach-summary1`
-
-## The Problem
-
-Most beginner and intermediate gym users do not need a full-time trainer. They need a fast second
-set of eyes:
-
-- "Am I doing the right exercise?"
-- "How many clean reps did I actually complete?"
-- "Is this a valid variation or a real issue?"
-- "What should I fix next session?"
-
-Today, that feedback is often inaccessible:
-
-- gyms can be far away or inconvenient
-- crowded spaces make people self-conscious about training in public
-- many users are afraid of doing an exercise wrong and being judged
-- private coaching is effective, but too expensive for regular use
-
-Pozify makes that feedback accessible from a short video, with a pipeline users can inspect instead
-of a black-box answer they just have to trust.
-
-## Why It Stands Out
-
-Pozify is not a generic chatbot and not a vague video captioner. It is a grounded movement-analysis
-pipeline:
-
-- computer vision extracts pose landmarks
-- a tiny trained router identifies the exercise
-- deterministic logic counts reps and tracks issues
-- knowledge cards keep the coaching language exercise-specific
-- a small language model turns structured JSON into a coach summary
-- a verifier catches unsafe or ungrounded summary output
-
-That design is the core product difference: structured evidence first, language second.
-
-## Sponsor Stack
-
-Primary sponsor tools used in this build:
-
-- `Hugging Face Spaces` for the app surface
-- `Hugging Face Inference` for cloud small-model runtime
-- `Modal` for coach-summary training and publishing workflows
-- `OpenAI Codex` for implementation support and hackathon build velocity
-
-Sponsor-fit highlights:
-
-- `Modal`: used to prepare data, train, evaluate, merge, and publish the coach-summary model
-- `OpenAI Codex`: used as the coding copilot during implementation and iteration
-- `Hugging Face`: used across the product surface, cloud inference path, model hosting, and Space deployment
-
-## Why Pozify Fits Build Small
-
-Pozify matches `Backyard AI` because it solves a real everyday problem with a small, practical,
-personal tool. It also strongly matches the broader Build Small philosophy:
-
-- local-first and modular architecture
-- transparent model boundaries instead of one giant opaque system
-- per-component models all under the `32B` limit
-- useful enough for repeated day-to-day use, not just a tech demo
-
-This gives Pozify a practical consumer use case that still feels very "Build Small": local-first,
-inspectable, modular, and cheap enough to run on real-world hardware budgets.
-
 ## What Pozify Delivers
 
 For each uploaded workout clip, Pozify produces:
 
 - detected exercise and confidence
-- rep-by-rep analysis JSON
-- valid variation markers versus real issues
-- annotated output video
-- grounded coach summary with fixes and next-session plan
-- provider, model, and summary source metadata in the UI
+- rep-by-rep analysis
+- valid variation markers versus real form issues
+- annotated output video and issue clips
+- grounded coach summary with fixes and a next-session plan
+- verifier-backed confidence and safety notes
 
-The UI also makes it obvious whether the coach summary came from:
-
-- `hf_inference`
-- a local merged model
-- or a conservative fallback
+The supported exercise labels are `squat`, `push_up`, `shoulder_press`, and `unknown`. The `unknown`
+label is intentional: Pozify should reject unsupported or unclear clips instead of forcing every
+video into one of the supported movements.
 
 ## Product Flow
+
+Pozify is not a generic chatbot and not a vague video captioner. It is a grounded movement-analysis
+pipeline:
 
 ```text
 video + user profile
 -> video QC
--> MediaPipe pose extraction
+-> pose extraction
 -> pose cleaning
 -> exercise router
 -> exercise-specific rep counter
@@ -162,27 +81,47 @@ video + user profile
 -> final report
 ```
 
-Supported router labels:
+The main product decision is simple: structured evidence first, language second. The language model
+does not inspect the raw video directly and invent advice. It explains the structured findings that
+the pipeline has already produced.
 
-- `squat`
-- `push_up`
-- `shoulder_press`
-- `unknown`
+## Small-Model Strategy
 
-## Model Stack
+Pozify is built around the belief that small, task-specific models can be the right default for many
+real products. A small model does not need to act like a large general assistant if the product gives
+it a narrow job, clean inputs, and a verifier.
 
-| Component               | Model or method                                          | Trained here?           | Runtime                                        |
-| ----------------------- | -------------------------------------------------------- | ----------------------- | ---------------------------------------------- |
-| Pose extraction         | MediaPipe Pose Landmarker Lite                           | No                      | CPU / MediaPipe delegate                       |
-| Exercise router         | PyTorch BiLSTM over 30-frame pose windows                | Yes                     | Torch                                          |
-| Router baseline         | scikit-learn `HistGradientBoostingClassifier`            | Yes                     | CPU fallback/reference                         |
-| Rep counting            | Exercise-specific state machines                         | No ML                   | CPU                                            |
-| Issue markers           | Transparent rules over per-rep metrics                   | No ML                   | CPU                                            |
-| Coach summary           | `build-small-hackathon/pozify-coach-summary1` by default | Fine-tuned merged model | HF Inference, local Transformers, or llama.cpp |
-| Coach-summary fine-tune | LoRA / merged checkpoint pipeline on Modal               | Yes                     | Local merged-model path recommended            |
-| Verifier                | Deterministic safety and grounding checks                | No ML                   | CPU                                            |
+That is the strategy here:
 
-The trained router is intentionally tiny:
+- use pose and deterministic logic to extract evidence before generation
+- train small models on the exact task they must perform
+- keep each model boundary inspectable
+- retrieve exercise-specific knowledge cards instead of relying on generic memory
+- evaluate outputs against product contracts, not only fluency
+- fall back conservatively when model output is unavailable or ungrounded
+
+For narrow tasks such as exercise routing or structured JSON-to-coaching-summary generation, a
+fine-tuned small model can match or beat a much larger generic model on the product's actual quality
+bar. The advantage comes from being optimized for the exact schema, vocabulary, examples, and failure
+modes Pozify cares about.
+
+## Models We Use
+
+Every runtime model used by Pozify fits under the Build Small `32B` parameter cap.
+
+| Component                   | Model or method                                  | Role                                                                  |
+| --------------------------- | ------------------------------------------------ | --------------------------------------------------------------------- |
+| Pose extraction             | MediaPipe Pose Landmarker Lite                   | Extracts body landmarks from video frames.                            |
+| Exercise router             | Custom PyTorch BiLSTM over 30-frame pose windows | Classifies `squat`, `push_up`, `shoulder_press`, or `unknown`.        |
+| Router baseline             | scikit-learn `HistGradientBoostingClassifier`    | Reference and fallback artifact for router experiments.               |
+| Rep counting                | Exercise-specific state machines                 | Counts reps from movement signals without an LLM.                     |
+| Issue markers               | Transparent rules over per-rep metrics           | Separates valid variations from likely form issues.                   |
+| Coach-summary base          | `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16`          | Base model for coach-summary LoRA SFT.                                |
+| Coach summary               | `build-small-hackathon/pozify-coach-summary1`    | Fine-tuned model for grounded structured coaching output.             |
+| Local/off-grid summary path | Nemotron GGUF through `llama.cpp`                | Optional local runtime path for small-model inference.                |
+| Verifier                    | Deterministic grounding and safety checks        | Blocks unsupported issues, diagnosis language, and ungrounded claims. |
+
+The trained exercise router is intentionally tiny:
 
 | Artifact                        |     Count |
 | ------------------------------- | --------: |
@@ -191,254 +130,72 @@ The trained router is intentionally tiny:
 | Window length                   | 30 frames |
 | Output classes                  |         4 |
 
-## Run The App Locally
+## Why It Fits Build Small
 
-This repo uses a `src/` layout, but `uv` is configured with `package = false`. Run it with:
+Pozify matches `Backyard AI` because it solves an everyday problem with a personal, practical tool:
+affordable at-home workout feedback without needing a gym or private coach.
 
-```bash
-uv sync
-uv run python app.py
-```
+It also matches the broader Build Small philosophy:
 
-Then open `http://127.0.0.1:7860`.
+- local-first and modular architecture
+- transparent model boundaries instead of one giant opaque model
+- per-component models under the `32B` limit
+- task-specific fine-tuning instead of relying only on a large general model
+- useful day-to-day workflow, not only a technical demo
 
-### Mock vs Real Mode
+## Hackathon Snapshot
 
-By default:
+- Track: `Backyard AI`
+- Submission format: `Gradio Space`
+- Core user impact: affordable at-home workout feedback from short videos
+- Hugging Face Space: [build-small-hackathon/Pozify](https://huggingface.co/spaces/build-small-hackathon/Pozify)
+- Team repo: [tihado/Pozify](https://github.com/tihado/Pozify)
+- Router model repo: [build-small-hackathon/pozify-exercise-router](https://huggingface.co/build-small-hackathon/pozify-exercise-router)
+- Default coach-summary model: [build-small-hackathon/pozify-coach-summary-nemotron](https://huggingface.co/build-small-hackathon/pozify-coach-summary-nemotron)
+- Demo video: `ADD_PUBLIC_DEMO_LINK`
+- Social post: `ADD_PUBLIC_SOCIAL_POST_LINK`
 
-- if no video is provided, Pozify uses mock mode
-- if a real video is uploaded, Pozify runs the full analysis pipeline
+Primary sponsor tools used in this build:
 
-Force mock mode:
+- `Hugging Face Spaces` for the app surface
+- `Hugging Face Inference` and local runtimes for small-model inference
+- `Modal` for training, evaluation, merging, and publishing workflows
+- `OpenAI Codex` for implementation support and iteration speed
 
-```bash
-POZIFY_MOCK_MODE=1 uv run python app.py
-```
+## How We Used Codex
 
-Force real mode:
+We used OpenAI Codex as a repo-aware coding agent during the build. The useful pattern was not to
+ask for generic code, but to ask Codex to inspect the current project, propose the smallest useful
+change, edit the right files, run relevant checks, and summarize what changed.
 
-```bash
-POZIFY_MOCK_MODE=0 uv run python app.py
-```
+Codex was most helpful for:
 
-If you already have the MediaPipe task file locally:
+- turning product ideas into scoped engineering tasks
+- moving across Python pipeline code, web UI files, scripts, configs, tests, and docs
+- researching changing platform constraints and connecting them back to this repo
+- reviewing diffs for regressions, missing tests, grounding problems, and unsafe wording
+- keeping hackathon notes, training reports, and handoff docs in sync with implementation
 
-```bash
-POZIFY_MEDIAPIPE_POSE_MODEL=/path/to/pose_landmarker_lite.task \
-POZIFY_MOCK_MODE=0 \
-uv run python app.py
-```
-
-## Coach Summary Runtime Options
-
-### 1. Fine-tuned coach model
-
-The app defaults to the fine-tuned coach-summary model:
-
-```bash
-export POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
-uv run python app.py
-```
-
-Pozify tries `chat_completion` first and falls back to `text_generation` when Hugging Face reports
-that the repo is not a chat model. The deterministic fallback summary remains enabled if hosted
-inference is unavailable or the model output fails validation.
-
-Recommended if you want the live Space or local demo to behave predictably during judging.
-
-For regular Hugging Face Spaces, keep the provider on hosted inference unless you have a dedicated
-local model runtime:
-
-```bash
-POZIFY_COACH_SUMMARY_PROVIDER=hf_inference
-POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
-```
-
-For Hugging Face ZeroGPU Spaces, local Transformers is selected automatically so the app does not
-call the hosted Hugging Face Inference API. You can also set it explicitly:
-
-```bash
-POZIFY_COACH_SUMMARY_PROVIDER=local_transformers
-POZIFY_COACH_SUMMARY_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
-POZIFY_SPACES_GPU_DURATION=300
-```
-
-`HF_TOKEN` is only needed for `hf_inference` or for downloading a private/gated local model repo.
-Pozify uses the Nemotron implementation bundled with Transformers instead of downloading remote
-model code. If fast Mamba kernels are unavailable at runtime, Pozify caps the local prompt context
-before generation to avoid the slow naive Mamba path crashing CUDA.
-
-### 2. Use the fine-tuned merged model locally
-
-Download the merged repo locally, then point Pozify at it:
-
-```bash
-export POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR=/absolute/path/to/merged_model
-export POZIFY_COACH_SUMMARY_BASE_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
-export POZIFY_COACH_SUMMARY_ADAPTER_ID=build-small-hackathon/pozify-coach-summary1
-uv run python app.py
-```
-
-This is the simplest way to use `build-small-hackathon/pozify-coach-summary1` today without adding a
-dedicated inference endpoint.
-
-### 3. Base cloud model override
-
-If you need the Nemotron base-model runtime:
-
-```bash
-export POZIFY_COACH_SUMMARY_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
-uv run python app.py
-```
-
-### 4. llama.cpp
-
-Pozify can send the coach-summary prompt to a local `llama-server` that exposes the
-OpenAI-compatible `/v1/chat/completions` endpoint.
-
-Example:
-
-```bash
-llama-server \
-  --model /path/to/nemotron-3-nano-4b.gguf \
-  --ctx-size 4096 \
-  --n-gpu-layers 99 \
-  --host 127.0.0.1 \
-  --port 8080
-```
-
-Then:
-
-```bash
-POZIFY_COACH_SUMMARY_PROVIDER=llama_cpp \
-POZIFY_COACH_SUMMARY_MODEL=local-nemotron-3-nano-4b-gguf \
-POZIFY_LLAMA_CPP_BASE_URL=http://127.0.0.1:8080 \
-POZIFY_COACH_SUMMARY_MAX_TOKENS=700 \
-uv run python app.py
-```
-
-### Useful environment variables
-
-| Variable                                    | Purpose                                                           |
-| ------------------------------------------- | ----------------------------------------------------------------- |
-| `POZIFY_ROUTER_DEVICE`                      | Override router device, for example `cpu` or `cuda`.              |
-| `POZIFY_SPACES_GPU_DURATION`                | `spaces.GPU` duration in seconds, default `120`.                  |
-| `POZIFY_COACH_SUMMARY_PROVIDER`             | `hf_inference`, `local_transformers`, or `llama_cpp`.             |
-| `POZIFY_COACH_SUMMARY_MODEL`                | Coach model id or llama.cpp model alias.                          |
-| `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`      | Prefer a local merged/model directory for coach summary.          |
-| `POZIFY_COACH_SUMMARY_MAX_INPUT_TOKENS`     | Max local Transformers prompt tokens, default `2048`.             |
-| `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER`      | Keep model output even when verifier fails.                       |
-
-## Exercise Router Training
-
-Run the full router training and publish flow:
-
-```bash
-uv run modal run scripts/exercise_router_modal.py \
-  --stage all \
-  --repo-id build-small-hackathon/pozify-exercise-router
-```
-
-Step-by-step:
-
-```bash
-uv run modal run scripts/exercise_router_modal.py --stage ingest
-uv run modal run scripts/exercise_router_modal.py --stage features
-uv run modal run scripts/exercise_router_modal.py --stage train-baseline
-uv run modal run scripts/exercise_router_modal.py --stage train-temporal
-uv run modal run scripts/exercise_router_modal.py --stage evaluate
-uv run modal run scripts/exercise_router_modal.py --stage publish --repo-id build-small-hackathon/pozify-exercise-router
-```
-
-The active router artifact is `temporal.pt`; the baseline is retained for comparison and fallback.
-
-## Coach Summary Training
-
-Build the grounded SFT dataset:
-
-```bash
-uv run python scripts/build_coach_summary_sft_dataset.py
-```
-
-Run the full coach-summary Modal flow:
-
-```bash
-uv run modal run scripts/coach_summary_modal.py \
-  --stage all \
-  --epochs 2 \
-  --style-weight 0.2 \
-  --repo-id build-small-hackathon/pozify-coach-summary1
-```
-
-The checked-in fine-tune config uses `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` as the base model.
-The Modal training, evaluation, and merge stages request an `A100-80GB` GPU because the Nemotron
-base model can run out of CUDA memory on the previous `A10G` setting.
-
-Step-by-step:
-
-```bash
-uv run modal run scripts/coach_summary_modal.py --stage prepare-data
-uv run modal run scripts/coach_summary_modal.py --stage train --epochs 2 --style-weight 0.2
-uv run modal run scripts/coach_summary_modal.py --stage evaluate --limit 5
-uv run modal run scripts/coach_summary_modal.py --stage merge
-uv run modal run scripts/coach_summary_modal.py --stage publish-merged --repo-id build-small-hackathon/pozify-coach-summary1
-```
-
-Important runtime note:
-
-- the default coach model is `build-small-hackathon/pozify-coach-summary1`
-- Hugging Face hosted inference may still reject a repo or produce invalid JSON, so the
-  conservative fallback summary stays enabled
-- for the most predictable fine-tuned inference path, use `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`
-
-## Generated Artifacts
-
-Each run creates `runs/<run_id>/` with:
-
-- `manifest.json`
-- `user_profile.json`
-- `video_manifest.json`
-- `pose_sequence.json`
-- `exercise_classification.json`
-- `reps.json`
-- `rep_debug.json`
-- `rep_analysis.json`
-- `variation.json`
-- `issue_markers.json`
-- `annotated_video.mp4`
-- `coach_summary.json`
-- `verification.json`
-- `final_report.json`
-
-JSON artifacts are validated before they are written. The final report records:
-
-- analysis mode
-- pose source
-- knowledge-card provenance
-- coach summary provider/model/source
-- verifier status and bypass flags
+The detailed team note is in [docs/50-codex-development-workflow.md](docs/50-codex-development-workflow.md).
+For the official product docs, start with [OpenAI Codex docs](https://developers.openai.com/codex),
+[Codex quickstart](https://developers.openai.com/codex/quickstart), and
+[Codex prompting](https://developers.openai.com/codex/prompting).
 
 ## Docs
 
-For the deeper technical write-up, training notes, and data workflow, see
-[docs/01-docs-index.md](docs/01-docs-index.md).
+The README is intentionally product-focused. Command-heavy setup, runtime, training, environment, and
+verification details live in the technical docs:
 
-## Development Checks
+- [Technical setup and runtime](docs/02-technical-setup.md)
+- [Hackathon overview report](docs/10-overview-build-small-hackathon-report.md)
+- [Router training report](docs/20-router-training-report.md)
+- [Router Hugging Face release guide](docs/21-router-huggingface-release.md)
+- [Coach summary Modal training](docs/30-coach-modal-training.md)
+- [Coach training report](docs/31-coach-training-report.md)
+- [Data collection guide](docs/40-data-custom-collection-guide.md)
+- [Docs index](docs/01-docs-index.md)
 
-```bash
-uv run ruff check
-uv run python -m compileall src scripts tests app.py
-uv run python -m unittest discover -s tests
-```
-
-Run the real MediaPipe fixture smoke test only when the fixture is available:
-
-```bash
-POZIFY_RUN_REAL_POSE_TESTS=1 \
-uv run python -m unittest tests.test_pose_steps.PoseStepTests.test_real_sample_mov_extracts_pose_landmarks
-```
-
-### Contributors
+## Contributors
 
 - 🚀 [@nvti](https://github.com/nvti)
 - 🌿 [@honghanhh](https://github.com/honghanhh)

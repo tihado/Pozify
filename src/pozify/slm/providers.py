@@ -265,31 +265,40 @@ def _tokenize_local_chat(
     messages: list[dict[str, str]],
     max_input_tokens: int,
 ) -> Any:
-    if hasattr(tokenizer, "apply_chat_template"):
-        template_kwargs: dict[str, Any] = {
-            "tokenize": True,
-            "add_generation_prompt": True,
-            "return_tensors": "pt",
-            "return_dict": True,
-            "truncation": True,
-            "max_length": max_input_tokens,
-        }
-        try:
-            return tokenizer.apply_chat_template(
-                messages,
-                enable_thinking=False,
-                **template_kwargs,
-            )
-        except TypeError:
-            return tokenizer.apply_chat_template(messages, **template_kwargs)
+    original_truncation_side = getattr(tokenizer, "truncation_side", None)
+    if original_truncation_side is not None:
+        tokenizer.truncation_side = "left"
+    try:
+        if hasattr(tokenizer, "apply_chat_template"):
+            template_kwargs: dict[str, Any] = {
+                "tokenize": True,
+                "add_generation_prompt": True,
+                "return_tensors": "pt",
+                "return_dict": True,
+                "truncation": True,
+                "max_length": max_input_tokens,
+            }
+            try:
+                return tokenizer.apply_chat_template(
+                    messages,
+                    enable_thinking=False,
+                    **template_kwargs,
+                )
+            except TypeError:
+                return tokenizer.apply_chat_template(messages, **template_kwargs)
 
-    text = "\n\n".join(f"{message['role']}: {message['content']}" for message in messages)
-    return tokenizer(
-        [text],
-        return_tensors="pt",
-        truncation=True,
-        max_length=max_input_tokens,
-    )
+        text = "\n\n".join(
+            f"{message['role']}: {message['content']}" for message in messages
+        )
+        return tokenizer(
+            [text],
+            return_tensors="pt",
+            truncation=True,
+            max_length=max_input_tokens,
+        )
+    finally:
+        if original_truncation_side is not None:
+            tokenizer.truncation_side = original_truncation_side
 
 
 @spaces_gpu(duration=_gpu_duration)

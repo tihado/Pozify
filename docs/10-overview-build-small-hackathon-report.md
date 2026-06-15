@@ -5,7 +5,7 @@ Status note:
 - This report is kept as the hackathon narrative document.
 - Current runtime defaults use `build-small-hackathon/pozify-coach-summary1`.
 - Current coach-summary training now includes a LoRA/merge/publish pipeline on Modal.
-- For the current operational commands, prefer [../README.md](../README.md) and
+- For the current operational commands, prefer [02-technical-setup.md](02-technical-setup.md) and
   [30-coach-modal-training.md](30-coach-modal-training.md).
 
 Date: June 14, 2026
