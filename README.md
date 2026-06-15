@@ -60,25 +60,35 @@ The supported exercise labels are `squat`, `push_up`, `shoulder_press`, and `unk
 label is intentional: Pozify should reject unsupported or unclear clips instead of forcing every
 video into one of the supported movements.
 
+![Pozify coach intelligence](https://tihado.com/images/pozify-coach-intelligence.webp)
+
 ## Product Flow
 
 Pozify is not a generic chatbot and not a vague video captioner. It is a grounded movement-analysis
 pipeline:
 
-```text
-video + user profile
--> video QC
--> pose extraction
--> pose cleaning
--> exercise router
--> exercise-specific rep counter
--> per-rep analysis
--> variation detection
--> issue markers
--> annotated video renderer
--> grounded coach summary
--> verifier
--> final report
+```mermaid
+flowchart TD
+    A["video + user profile"] --> B["video QC"]
+    B --> C["pose extraction"]
+    C --> D["pose cleaning"]
+    D --> E["exercise router"]
+    E --> F["exercise-specific rep counter"]
+    F --> G["per-rep analysis"]
+    G --> H["variation detection"]
+    H --> I["issue markers"]
+    I --> J["annotated video renderer"]
+    J --> K["grounded coach summary"]
+    K --> L["verifier"]
+    L --> M["final report"]
+
+    classDef vision fill:#1e3a5f,stroke:#60a5fa,color:#fff
+    classDef movement fill:#1e3f2e,stroke:#4ade80,color:#fff
+    classDef output fill:#3b2f1e,stroke:#fbbf24,color:#fff
+
+    class B,C,D vision
+    class E,F,G,H,I movement
+    class J,K,L,M output
 ```
 
 The main product decision is simple: structured evidence first, language second. The language model
@@ -154,6 +164,7 @@ It also matches the broader Build Small philosophy:
 - Default coach-summary model: [build-small-hackathon/pozify-coach-summary-nemotron](https://huggingface.co/build-small-hackathon/pozify-coach-summary-nemotron)
 - Demo video: `ADD_PUBLIC_DEMO_LINK`
 - Social post: `ADD_PUBLIC_SOCIAL_POST_LINK`
+- Blog post: [Pozify: Small-Model Workout Form Review from Short Videos](https://tihado.com/blogs/introducing-pozify-build-small-hackathon/)
 
 Primary sponsor tools used in this build:
 
