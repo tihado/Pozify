@@ -162,8 +162,8 @@ It also matches the broader Build Small philosophy:
 - Team repo: [tihado/Pozify](https://github.com/tihado/Pozify)
 - Router model repo: [build-small-hackathon/pozify-exercise-router](https://huggingface.co/build-small-hackathon/pozify-exercise-router)
 - Default coach-summary model: [build-small-hackathon/pozify-coach-summary-nemotron](https://huggingface.co/build-small-hackathon/pozify-coach-summary-nemotron)
-- Demo video: `ADD_PUBLIC_DEMO_LINK`
-- Social post: `ADD_PUBLIC_SOCIAL_POST_LINK`
+- Demo video: [Posify at build-small-hackathon 2026](https://www.youtube.com/watch?v=43Lx-Ia2B5U)
+- Social post: [Posify on Linkedin](https://www.linkedin.com/posts/buildsmallhackathon-huggingface-gradio-share-7472342687812186112-36ON/)
 - Blog post: [Pozify: Small-Model Workout Form Review from Short Videos](https://tihado.com/blogs/introducing-pozify-build-small-hackathon/)
 
 Primary sponsor tools used in this build:
