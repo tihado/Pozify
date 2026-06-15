@@ -185,7 +185,9 @@ class AnnotatedRendererTests(unittest.TestCase):
             (active_roi[:, :, 2] > 180) & (active_roi[:, :, 1] < 180) & (active_roi[:, :, 0] < 120)
         )
         inactive_red_pixels = np.count_nonzero(
-            (inactive_roi[:, :, 2] > 180) & (inactive_roi[:, :, 1] < 180) & (inactive_roi[:, :, 0] < 120)
+            (inactive_roi[:, :, 2] > 180)
+            & (inactive_roi[:, :, 1] < 180)
+            & (inactive_roi[:, :, 0] < 120)
         )
         self.assertGreater(active_red_pixels, inactive_red_pixels * 4)
 
@@ -221,6 +223,18 @@ class AnnotatedRendererTests(unittest.TestCase):
                 }
             )
         )
+
+    def test_bt709_encode_uses_first_optional_audio_stream(self) -> None:
+        command = annotated_renderer._encode_bt709_command(
+            "ffmpeg",
+            Path("raw.mp4"),
+            Path("output.mp4"),
+            Path("source.mov"),
+        )
+
+        self.assertIn("1:a:0?", command)
+        self.assertNotIn("1:a?", command)
+        self.assertNotIn("-an", command)
         self.assertFalse(
             annotated_renderer._needs_sdr_conversion(
                 {

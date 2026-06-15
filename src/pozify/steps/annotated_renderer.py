@@ -175,6 +175,21 @@ def _encode_bt709_output(
     if ffmpeg is None:
         return False
 
+    command = _encode_bt709_command(ffmpeg, raw_video_path, output_path, audio_source_path)
+
+    try:
+        subprocess.run(command, check=True, capture_output=True, timeout=120)
+    except (subprocess.SubprocessError, OSError):
+        return False
+    return output_path.exists() and output_path.stat().st_size > 0
+
+
+def _encode_bt709_command(
+    ffmpeg: str,
+    raw_video_path: Path,
+    output_path: Path,
+    audio_source_path: Path | None,
+) -> list[str]:
     command = [
         ffmpeg,
         "-y",
@@ -193,7 +208,7 @@ def _encode_bt709_output(
         ]
     )
     if audio_source_path is not None:
-        command.extend(["-map", "1:a?"])
+        command.extend(["-map", "1:a:0?"])
 
     command.extend(
         [
@@ -215,12 +230,7 @@ def _encode_bt709_output(
     else:
         command.append("-an")
     command.append(str(output_path))
-
-    try:
-        subprocess.run(command, check=True, capture_output=True, timeout=120)
-    except (subprocess.SubprocessError, OSError):
-        return False
-    return output_path.exists() and output_path.stat().st_size > 0
+    return command
 
 
 def _frame_landmark_points(
@@ -274,7 +284,11 @@ def _draw_pose(
 
 def _issue_angle_label(issue: IssueMarker) -> str | None:
     for key, value in issue.evidence.items():
-        if not key.endswith("_deg") or isinstance(value, bool) or not isinstance(value, int | float):
+        if (
+            not key.endswith("_deg")
+            or isinstance(value, bool)
+            or not isinstance(value, int | float)
+        ):
             continue
         return f"{key.removesuffix('_deg').replace('_', ' ')} {round(float(value))} deg"
     return None
@@ -340,11 +354,7 @@ def _rep_phase(frame_index: int, reps: Reps) -> str | None:
 
 
 def _active_issues(frame_index: int, issues: IssueMarkers) -> list[IssueMarker]:
-    return [
-        issue
-        for issue in issues.issues
-        if issue.start_frame <= frame_index <= issue.end_frame
-    ]
+    return [issue for issue in issues.issues if issue.start_frame <= frame_index <= issue.end_frame]
 
 
 def _highlighted_joints(active_issues: list[IssueMarker]) -> set[str]:
@@ -566,9 +576,7 @@ def _draw_overlays(
         labels.append(phase_label)
     primary_issue = _primary_issue(active_issues)
     if primary_issue is not None:
-        labels.append(
-            f"{primary_issue.issue} severity {round(primary_issue.severity * 100)}%"
-        )
+        labels.append(f"{primary_issue.issue} severity {round(primary_issue.severity * 100)}%")
     warning = _confidence_warning(active_issues, quality_warnings)
     if warning is not None:
         labels.append(warning)
