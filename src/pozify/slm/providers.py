@@ -28,7 +28,7 @@ DEFAULT_PROVIDER = "hf_inference"
 DEFAULT_MODEL = "build-small-hackathon/pozify-coach-summary1"
 DEFAULT_LLAMA_CPP_BASE_URL = "http://127.0.0.1:8080"
 DEFAULT_MAX_INPUT_TOKENS = 2048
-NEMOTRON_NAIVE_MAX_INPUT_TOKENS = 128
+NEMOTRON_NAIVE_MAX_INPUT_TOKENS = 512
 LOCAL_TRANSFORMERS_PROVIDER = "local_transformers"
 LOCAL_TRANSFORMERS_ALIASES = {LOCAL_TRANSFORMERS_PROVIDER, "local", "transformers"}
 LLAMA_CPP_PROVIDER = "llama_cpp"
@@ -314,7 +314,10 @@ def _generate_local_transformers_summary(
     messages = [
         {
             "role": "system",
-            "content": "Return JSON only.",
+            "content": (
+                "Return exactly one valid JSON object. Start with `{` and end with `}`. "
+                "Do not include reasoning, markdown, prose, or code fences."
+            ),
         },
         {
             "role": "user",
@@ -333,6 +336,7 @@ def _generate_local_transformers_summary(
     generation_kwargs: dict[str, Any] = {
         "max_new_tokens": max_tokens,
         "do_sample": temperature > 0,
+        "top_p": 1.0,
     }
     if temperature > 0:
         generation_kwargs["temperature"] = temperature
@@ -468,7 +472,7 @@ def get_coach_summary_model() -> CoachSummaryModel | None:
             model=local_model_dir,
             max_tokens=_env_int(MAX_TOKENS_ENV, 700),
             max_input_tokens=_env_int(MAX_INPUT_TOKENS_ENV, DEFAULT_MAX_INPUT_TOKENS),
-            temperature=_env_float(TEMPERATURE_ENV, 0.1),
+            temperature=_env_float(TEMPERATURE_ENV, 0.0),
             token=os.getenv(HF_TOKEN_ENV),
             base_model=os.getenv(BASE_MODEL_ENV),
             adapter_id=os.getenv(ADAPTER_ENV),
@@ -490,7 +494,7 @@ def get_coach_summary_model() -> CoachSummaryModel | None:
             model=os.getenv(MODEL_ENV, DEFAULT_MODEL),
             max_tokens=_env_int(MAX_TOKENS_ENV, 700),
             max_input_tokens=_env_int(MAX_INPUT_TOKENS_ENV, DEFAULT_MAX_INPUT_TOKENS),
-            temperature=_env_float(TEMPERATURE_ENV, 0.1),
+            temperature=_env_float(TEMPERATURE_ENV, 0.0),
             token=os.getenv(HF_TOKEN_ENV),
         )
 

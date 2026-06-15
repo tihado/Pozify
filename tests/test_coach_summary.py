@@ -419,6 +419,10 @@ class CoachSummaryTests(unittest.TestCase):
         self.assertEqual(result.model, "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16")
         self.assertEqual(result.source, "model_or_local")
 
+    def test_extract_json_object_reports_model_output_preview(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Output preview: I cannot return JSON"):
+            coach_summary._extract_json_object("I cannot return JSON for that request.")
+
     def test_verifier_rejects_issue_not_in_json(self) -> None:
         summary = CoachSummary(
             summary="The strongest issue was `incomplete_depth`.",

@@ -95,8 +95,14 @@ def build_coach_summary_prompt(
     }
 
     instructions = {
+        "response_format": {
+            "type": "json_object",
+            "schema": expected_schema,
+        },
         "task": "Generate a grounded coach summary from structured exercise-analysis artifacts.",
         "rules": [
+            "Return exactly one JSON object that matches response_format.schema.",
+            "The first output character must be `{`.",
             "Use only the evidence JSON and retrieved knowledge cards.",
             "Do not infer new issues that are absent from issue_summary.issues.",
             "Do not diagnose injuries, pain, mobility deficits, or pathology.",
@@ -108,7 +114,6 @@ def build_coach_summary_prompt(
             "If evidence is limited or confidence is low, say so in confidence_notes.",
             "Return JSON only. No markdown fences. No extra commentary.",
         ],
-        "schema": expected_schema,
     }
     json_dump_kwargs = {"ensure_ascii": False, "separators": (",", ":")}
     return "\n\n".join(

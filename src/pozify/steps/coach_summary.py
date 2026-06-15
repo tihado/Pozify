@@ -28,6 +28,13 @@ class CoachSummaryResult:
     source: str
 
 
+def _text_preview(text: str, *, limit: int = 240) -> str:
+    preview = " ".join(text.strip().split())
+    if len(preview) > limit:
+        return f"{preview[:limit]}..."
+    return preview or "<empty>"
+
+
 def _extract_json_object(text: str) -> dict[str, Any]:
     text = text.strip()
     if text.startswith("```"):
@@ -36,12 +43,21 @@ def _extract_json_object(text: str) -> dict[str, Any]:
 
     try:
         payload = json.loads(text)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
         start = text.find("{")
         end = text.rfind("}")
         if start == -1 or end == -1 or end <= start:
-            raise
-        payload = json.loads(text[start : end + 1])
+            raise ValueError(
+                "Coach summary model output was not valid JSON. "
+                f"Parser error: {exc}. Output preview: {_text_preview(text)}"
+            ) from exc
+        try:
+            payload = json.loads(text[start : end + 1])
+        except json.JSONDecodeError as nested_exc:
+            raise ValueError(
+                "Coach summary model output contained a JSON-like object that could not be "
+                f"parsed. Parser error: {nested_exc}. Output preview: {_text_preview(text)}"
+            ) from nested_exc
 
     if not isinstance(payload, dict):
         raise ValueError("Coach summary model output must be a JSON object")
