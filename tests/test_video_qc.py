@@ -14,6 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pozify.steps import video_qc
 
 
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
 class VideoQCTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -81,6 +84,17 @@ class VideoQCTests(unittest.TestCase):
         self.assertIsNotNone(manifest.codec)
         self.assertIsNotNone(manifest.brightness_mean)
         self.assertIsNotNone(manifest.blur_laplacian_var)
+
+    def test_rotated_mov_reports_display_dimensions(self) -> None:
+        path = FIXTURES_DIR / "IMG_2296.MOV"
+        self.assertTrue(path.exists(), path)
+
+        manifest = video_qc.run(str(path))
+
+        self.assertTrue(manifest.analysis_allowed)
+        self.assertEqual(manifest.width, 1080)
+        self.assertEqual(manifest.height, 1920)
+        self.assertEqual(manifest.quality_warnings, [])
 
     def test_invalid_video_sets_decode_failure_and_blocks_analysis(self) -> None:
         manifest = video_qc.run(str(Path(self.temp_dir.name) / "missing.mp4"))

@@ -15,7 +15,7 @@ from pozify.steps.pose_backends import (
     PoseBackendUnavailableError,
     create_pose_backend,
 )
-from pozify.steps.video_qc import sample_frame_indices
+from pozify.steps.video_qc import enable_capture_orientation, sample_frame_indices
 
 
 CRITICAL_LANDMARKS = {
@@ -48,6 +48,7 @@ def _iter_video_frames(
     try:
         if not capture.isOpened():
             return
+        enable_capture_orientation(capture)
         if sample_count is None:
             for frame_index in range(manifest.total_frames):
                 ok, frame = capture.read()
@@ -78,30 +79,21 @@ def _pose_quality(landmarks: dict[str, dict[str, float]]) -> dict[str, Any]:
             "pose_warning": "pose_not_detected",
         }
 
-    visibility_values = [
-        landmark.get("visibility", 0.0) for landmark in landmarks.values()
-    ]
+    visibility_values = [landmark.get("visibility", 0.0) for landmark in landmarks.values()]
     critical_values = [
-        landmarks[name].get("visibility", 0.0)
-        for name in CRITICAL_LANDMARKS
-        if name in landmarks
+        landmarks[name].get("visibility", 0.0) for name in CRITICAL_LANDMARKS if name in landmarks
     ]
     full_body_values = [
-        landmarks[name].get("visibility", 0.0)
-        for name in FULL_BODY_LANDMARKS
-        if name in landmarks
+        landmarks[name].get("visibility", 0.0) for name in FULL_BODY_LANDMARKS if name in landmarks
     ]
     critical_visible = (
-        len(critical_values) == len(CRITICAL_LANDMARKS)
-        and min(critical_values, default=0.0) >= 0.5
+        len(critical_values) == len(CRITICAL_LANDMARKS) and min(critical_values, default=0.0) >= 0.5
     )
     return {
         "mean_visibility": round(sum(visibility_values) / len(visibility_values), 4),
         "critical_landmarks_visible": critical_visible,
         "full_body_visibility_proxy": (
-            round(sum(full_body_values) / len(full_body_values), 4)
-            if full_body_values
-            else 0.0
+            round(sum(full_body_values) / len(full_body_values), 4) if full_body_values else 0.0
         ),
         "landmark_count": len(landmarks),
     }
@@ -116,9 +108,7 @@ def _coordinate_source(detection_source: str, world_landmarks: dict[str, dict[st
 
 
 def _empty_sequence() -> PoseSequence:
-    return PoseSequence(
-        frames=[], normalized=False, smoothing_method="none", pose_valid_ratio=0.0
-    )
+    return PoseSequence(frames=[], normalized=False, smoothing_method="none", pose_valid_ratio=0.0)
 
 
 def _unavailable_sequence(reason: str) -> PoseSequence:
@@ -164,9 +154,7 @@ def _run_with_backend(manifest: VideoManifest, backend: PoseBackend) -> PoseSequ
             frames.append(
                 PoseFrame(
                     frame_index=frame_index,
-                    timestamp_sec=(
-                        round(frame_index / manifest.fps, 3) if manifest.fps else 0.0
-                    ),
+                    timestamp_sec=(round(frame_index / manifest.fps, 3) if manifest.fps else 0.0),
                     landmarks=detection.landmarks,
                     world_landmarks=detection.world_landmarks,
                     pose_quality={
@@ -205,16 +193,12 @@ def _run_named_backend(manifest: VideoManifest, backend_name: str) -> PoseSequen
 def _run_mock(manifest: VideoManifest) -> PoseSequence:
     frames: list[PoseFrame] = []
     backend = MockPoseBackend()
-    for frame_index in sample_frame_indices(
-        manifest.total_frames, DEFAULT_POSE_SAMPLE_COUNT
-    ):
+    for frame_index in sample_frame_indices(manifest.total_frames, DEFAULT_POSE_SAMPLE_COUNT):
         detection = backend.detect(None, frame_index=frame_index)
         frames.append(
             PoseFrame(
                 frame_index=frame_index,
-                timestamp_sec=(
-                    round(frame_index / manifest.fps, 3) if manifest.fps else 0.0
-                ),
+                timestamp_sec=(round(frame_index / manifest.fps, 3) if manifest.fps else 0.0),
                 landmarks=detection.landmarks,
                 world_landmarks=detection.world_landmarks,
                 pose_quality={

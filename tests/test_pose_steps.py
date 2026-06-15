@@ -27,9 +27,7 @@ from pozify.steps.pose_backends import (
 from pozify.steps.pose_backends.mediapipe import MediaPipePoseBackend, _MediaPipeTasksPoseAdapter
 
 
-def _landmark(
-    x: float, y: float, z: float = 0.0, visibility: float = 0.9
-) -> SimpleNamespace:
+def _landmark(x: float, y: float, z: float = 0.0, visibility: float = 0.9) -> SimpleNamespace:
     return SimpleNamespace(x=x, y=y, z=z, visibility=visibility)
 
 
@@ -75,9 +73,7 @@ class PoseStepTests(unittest.TestCase):
 
     def _write_video(self, frame_count: int = 4) -> Path:
         path = Path(self.temp_dir.name) / "pose.mp4"
-        writer = cv2.VideoWriter(
-            str(path), cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (640, 480)
-        )
+        writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (640, 480))
         self.assertTrue(writer.isOpened())
         for frame_index in range(frame_count):
             frame = np.full((480, 640, 3), 120 + frame_index, dtype=np.uint8)
@@ -213,7 +209,10 @@ class PoseStepTests(unittest.TestCase):
             frames = list(pose_landmarker._iter_video_frames(manifest, sample_count=None))
 
         self.assertEqual([frame_index for frame_index, _ in frames], [0, 1, 2])
-        self.assertEqual(capture.set_calls, [])
+        seek_calls = [call for call in capture.set_calls if call[0] == cv2.CAP_PROP_POS_FRAMES]
+        self.assertEqual(seek_calls, [])
+        if hasattr(cv2, "CAP_PROP_ORIENTATION_AUTO"):
+            self.assertIn((cv2.CAP_PROP_ORIENTATION_AUTO, 1), capture.set_calls)
 
     def test_pose_cleaning_interpolates_smooths_and_adds_normalized_fields(
         self,

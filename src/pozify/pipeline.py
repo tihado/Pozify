@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-from pozify import sample_pose_cache
 from pozify.artifacts import write_json
 from pozify.contracts import UserProfile, Verification, to_dict
 from pozify.env import env_truthy, load_local_env
@@ -68,9 +67,7 @@ def run_pipeline(
     mock_mode = _env_mock_mode(video_path) if mock is None else mock
     bypass_verifier_enabled = _bypass_verifier_enabled(bypass_verifier)
 
-    run_id = (
-        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
-    )
+    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
     run_dir = RUNS_DIR / run_id
     artifact_index: list[dict[str, str]] = []
 
@@ -131,12 +128,8 @@ def run_pipeline(
         "active",
         "Now I am mapping your posture and tracking the key body landmarks.",
     )
-    cached_pose_sequence = None if mock_mode else sample_pose_cache.load(manifest)
-    if cached_pose_sequence is None:
-        pose_sequence = pose_landmarker.run(manifest, mock=mock_mode)
-        cleaned_pose_sequence = pose_cleaning.run(pose_sequence)
-    else:
-        cleaned_pose_sequence = cached_pose_sequence
+    pose_sequence = pose_landmarker.run(manifest, mock=mock_mode)
+    cleaned_pose_sequence = pose_cleaning.run(pose_sequence)
     write_artifact("pose_sequence.json", cleaned_pose_sequence)
     pose_source = (
         cleaned_pose_sequence.frames[0].pose_quality.get("source")
@@ -150,13 +143,10 @@ def run_pipeline(
         frame_count=len(cleaned_pose_sequence.frames),
         pose_source=pose_source,
         pose_valid_ratio=cleaned_pose_sequence.pose_valid_ratio,
-        pose_cache_hit=cached_pose_sequence is not None,
     )
 
     emit("exercise", "active", "Let me figure out which exercise you are doing.")
-    classification = exercise_classifier.run(
-        cleaned_pose_sequence, profile, mock=mock_mode
-    )
+    classification = exercise_classifier.run(cleaned_pose_sequence, profile, mock=mock_mode)
     write_artifact("exercise_classification.json", classification)
     emit(
         "exercise",

@@ -20,6 +20,12 @@ DEFAULT_SAMPLE_COUNT = 12
 HARD_FAILURE_WARNINGS = {"video_decode_failed"}
 
 
+def enable_capture_orientation(capture: cv2.VideoCapture) -> None:
+    orientation_auto = getattr(cv2, "CAP_PROP_ORIENTATION_AUTO", None)
+    if orientation_auto is not None:
+        capture.set(orientation_auto, 1)
+
+
 def _decode_fourcc(value: float) -> str | None:
     code = int(value)
     if code <= 0:
@@ -43,12 +49,7 @@ def sample_frame_indices(total_frames: int, sample_count: int = DEFAULT_SAMPLE_C
         return list(range(total_frames))
 
     last_index = total_frames - 1
-    return sorted(
-        {
-            round(index * last_index / (sample_count - 1))
-            for index in range(sample_count)
-        }
-    )
+    return sorted({round(index * last_index / (sample_count - 1)) for index in range(sample_count)})
 
 
 def sample_video_frames(
@@ -60,6 +61,7 @@ def sample_video_frames(
         if not capture.isOpened():
             return
 
+        enable_capture_orientation(capture)
         total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
         for frame_index in sample_frame_indices(total_frames, sample_count):
             capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
@@ -104,6 +106,7 @@ def run(video_path: str | None) -> VideoManifest:
         if not capture.isOpened():
             return _empty_manifest(video_path, ["video_decode_failed"])
 
+        enable_capture_orientation(capture)
         fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
         total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
         width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)

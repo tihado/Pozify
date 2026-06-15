@@ -17,10 +17,7 @@ from pozify import pipeline
 from pozify.contracts import (
     CoachSummary,
     ContractValidationError,
-    PoseFrame,
-    PoseSequence,
     UserProfile,
-    VideoManifest,
     validate_contract,
 )
 from pozify.exercise_catalog import USER_SELECTABLE_EXERCISES
@@ -148,9 +145,7 @@ class PipelineContractTests(unittest.TestCase):
         for frame_index in range(int(fps * duration_sec)):
             frame = np.full((height, width, 3), 130, dtype=np.uint8)
             offset = frame_index % 120
-            cv2.rectangle(
-                frame, (40 + offset, 80), (260 + offset, 300), (245, 245, 245), -1
-            )
+            cv2.rectangle(frame, (40 + offset, 80), (260 + offset, 300), (245, 245, 245), -1)
             cv2.line(
                 frame,
                 (0, frame_index % height),
@@ -174,19 +169,13 @@ class PipelineContractTests(unittest.TestCase):
             self.assertEqual(sorted(payload.keys()), keys, artifact_name)
             if artifact_name == "final_report.json":
                 self.assertIn("issue_thumbnail_paths", payload["artifacts"])
-                self.assertIsInstance(
-                    payload["artifacts"]["issue_thumbnail_paths"], list
-                )
+                self.assertIsInstance(payload["artifacts"]["issue_thumbnail_paths"], list)
                 self.assertIn("issue_clip_paths", payload["artifacts"])
                 self.assertIsInstance(payload["artifacts"]["issue_clip_paths"], list)
                 self.assertIn("knowledge_card_pack_paths", payload["artifacts"])
-                self.assertIsInstance(
-                    payload["artifacts"]["knowledge_card_pack_paths"], list
-                )
+                self.assertIsInstance(payload["artifacts"]["knowledge_card_pack_paths"], list)
                 self.assertIn("knowledge_external_cards_loaded", payload["artifacts"])
-                self.assertIn(
-                    "knowledge_external_cards_retrieved", payload["artifacts"]
-                )
+                self.assertIn("knowledge_external_cards_retrieved", payload["artifacts"])
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertTrue(manifest["mock_mode"])
@@ -209,16 +198,12 @@ class PipelineContractTests(unittest.TestCase):
         )
 
     def test_pipeline_runs_end_to_end_without_video(self) -> None:
-        result = pipeline.run_pipeline(
-            video_path=None, profile_input=PROFILE_INPUT, mock=True
-        )
+        result = pipeline.run_pipeline(video_path=None, profile_input=PROFILE_INPUT, mock=True)
 
         self._assert_pipeline_artifacts(result)
         report = result["final_report"]
         self.assertEqual(report["exercise"]["exercise"], "squat")
-        self.assertEqual(
-            report["video_manifest"]["quality_warnings"], ["video_decode_failed"]
-        )
+        self.assertEqual(report["video_manifest"]["quality_warnings"], ["video_decode_failed"])
         self.assertFalse(report["video_manifest"]["analysis_allowed"])
 
     def test_pipeline_runs_end_to_end_with_fixture_video_path(self) -> None:
@@ -234,83 +219,6 @@ class PipelineContractTests(unittest.TestCase):
         self.assertTrue(report["video_manifest"]["analysis_allowed"])
         self.assertEqual(report["video_manifest"]["width"], 640)
         self.assertEqual(report["video_manifest"]["height"], 480)
-
-    def test_pipeline_uses_cached_sample_pose_sequence_when_available(self) -> None:
-        fixture = self._write_video("sample.mp4", duration_sec=1 / 30)
-        manifest = VideoManifest(
-            video_path=str(fixture),
-            fps=30.0,
-            duration_sec=0.033,
-            total_frames=1,
-            sampled_frames=1,
-            width=640,
-            height=480,
-            codec="mp4v",
-            container="mp4",
-            brightness_mean=120.0,
-            blur_laplacian_var=80.0,
-            quality_warnings=[],
-            analysis_allowed=True,
-        )
-        cached_sequence = PoseSequence(
-            frames=[
-                PoseFrame(
-                    frame_index=0,
-                    timestamp_sec=0.0,
-                    landmarks={
-                        "left_hip": {
-                            "x": 0.4,
-                            "y": 0.5,
-                            "z": 0.0,
-                            "visibility": 0.9,
-                        }
-                    },
-                    world_landmarks={},
-                    pose_quality={
-                        "source": "mediapipe_pose",
-                        "mean_visibility": 0.9,
-                        "landmark_schema": "coco17",
-                    },
-                )
-            ],
-            normalized=True,
-            smoothing_method="exponential_smoothing",
-            pose_valid_ratio=1.0,
-        )
-        events: list[dict[str, object]] = []
-
-        with (
-            patch("pozify.pipeline.video_qc.run", return_value=manifest),
-            patch(
-                "pozify.pipeline.sample_pose_cache.load",
-                return_value=cached_sequence,
-            ) as load_cache,
-            patch("pozify.pipeline.pose_landmarker.run") as run_landmarker,
-            patch("pozify.pipeline.pose_cleaning.run") as run_cleaning,
-        ):
-            result = pipeline.run_pipeline(
-                video_path=str(fixture),
-                profile_input={**PROFILE_INPUT, "intended_exercise": "unknown"},
-                mock=False,
-                progress=events.append,
-            )
-
-        load_cache.assert_called_once_with(manifest)
-        run_landmarker.assert_not_called()
-        run_cleaning.assert_not_called()
-
-        run_dir = Path(str(result["run_dir"]))
-        pose_payload = json.loads((run_dir / "pose_sequence.json").read_text())
-        self.assertEqual(
-            pose_payload["frames"][0]["pose_quality"]["source"],
-            "mediapipe_pose",
-        )
-        pose_done = next(
-            event
-            for event in events
-            if event.get("step") == "pose" and event.get("status") == "done"
-        )
-        self.assertTrue(pose_done["payload"]["pose_cache_hit"])  # type: ignore[index]
 
     def test_pipeline_emits_progress_after_steps(self) -> None:
         events: list[dict[str, object]] = []
@@ -332,9 +240,7 @@ class PipelineContractTests(unittest.TestCase):
             [event["step"] for event in done_events],
             ["quality", "pose", "exercise", "reps", "issues", "render", "coach"],
         )
-        payload_by_step = {
-            str(event["step"]): event.get("payload", {}) for event in done_events
-        }
+        payload_by_step = {str(event["step"]): event.get("payload", {}) for event in done_events}
         self.assertEqual(payload_by_step["exercise"]["exercise"], "squat")
         self.assertEqual(payload_by_step["reps"]["rep_count"], 0)
         self.assertEqual(payload_by_step["issues"]["issue_count"], 0)
@@ -366,9 +272,7 @@ class PipelineContractTests(unittest.TestCase):
                 "pozify.pipeline.verifier.run",
             ) as verifier_run,
         ):
-            result = pipeline.run_pipeline(
-                video_path=None, profile_input=PROFILE_INPUT, mock=True
-            )
+            result = pipeline.run_pipeline(video_path=None, profile_input=PROFILE_INPUT, mock=True)
 
         self._assert_pipeline_artifacts(result)
         report = result["final_report"]
@@ -386,9 +290,7 @@ class PipelineContractTests(unittest.TestCase):
             report["verification"]["notes"],
             ["Coach summary verifier is disabled for this run."],
         )
-        self.assertTrue(
-            report["artifacts"]["coach_summary_verifier_bypass_requested"]
-        )
+        self.assertTrue(report["artifacts"]["coach_summary_verifier_bypass_requested"])
         verifier_run.assert_not_called()
 
     def test_contract_validation_rejects_missing_required_field(self) -> None:
@@ -454,9 +356,7 @@ class PipelineContractTests(unittest.TestCase):
         self.assertEqual(report["exercise"]["exercise"], "unknown")
         self.assertFalse(report["exercise"]["fallback_required"])
         self.assertEqual(report["reps"]["reps"], [])
-        self.assertEqual(
-            report["reps"]["partial_reps"], [{"reason": "unknown_exercise"}]
-        )
+        self.assertEqual(report["reps"]["partial_reps"], [{"reason": "unknown_exercise"}])
 
     def test_mock_mode_defaults_to_real_when_video_path_is_present(self) -> None:
         with patch.dict(os.environ, {}, clear=True):

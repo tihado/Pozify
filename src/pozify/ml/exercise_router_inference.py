@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from pozify.env import load_local_env
 from pozify.hf_spaces import router_torch_device
 from pozify.ml.exercise_router_features import (
     FEATURE_SCHEMA,
@@ -92,6 +93,7 @@ def load_router_model_from_hf(
     repo_id: str | None = None,
     revision: str | None = None,
 ) -> RouterModelBundle | None:
+    load_local_env()
     if _env_truthy(os.getenv(HF_DISABLE_ENV)):
         return None
 
@@ -226,9 +228,7 @@ def predict_window_probabilities(
 
     labels = _labels_from_artifact(bundle.labels, bundle.model)
     if bundle.feature_schema != FEATURE_SCHEMA or bundle.landmark_schema != ROUTER_LANDMARK_SCHEMA:
-        raise ValueError(
-            "Router model schema does not match current pose feature schema"
-        )
+        raise ValueError("Router model schema does not match current pose feature schema")
     if bundle.model_kind == "temporal":
         inputs = np.stack([window.tensor for window in windows]).astype(np.float32)
     else:
@@ -261,7 +261,9 @@ def window_predictions_from_scores(
                 end_sec=window.end_sec,
                 label=label,
                 confidence=round(confidence, 4),
-                scores={key: round(max(0.0, min(1.0, scores.get(key, 0.0))), 6) for key in ROUTER_LABELS},
+                scores={
+                    key: round(max(0.0, min(1.0, scores.get(key, 0.0))), 6) for key in ROUTER_LABELS
+                },
             )
         )
     return predictions
@@ -292,9 +294,7 @@ def aggregate_window_predictions(
     winning_agreement = (
         sum(1 for prediction in predictions if prediction.label == winning_label) / window_count
     )
-    winning_confidences = [
-        prediction.scores.get(winning_label, 0.0) for prediction in predictions
-    ]
+    winning_confidences = [prediction.scores.get(winning_label, 0.0) for prediction in predictions]
     confidence = min(winning_score, sum(winning_confidences) / len(winning_confidences))
     score_margin = winning_score - second_score
     fallback_required = (
@@ -340,7 +340,7 @@ def _selected_artifact_path(model_dir: Path) -> Path | None:
     if not selection_path.exists():
         return None
     selection = json.loads(selection_path.read_text(encoding="utf-8"))
-    selected_artifact = selection.get("selected_artifact")
+    selected_artifact = selection.get("selected_artifact") or selection.get("selected_model")
     if not isinstance(selected_artifact, str) or not selected_artifact:
         return None
     return model_dir / selected_artifact
@@ -348,7 +348,7 @@ def _selected_artifact_path(model_dir: Path) -> Path | None:
 
 def _selected_artifact_name(selection_path: Path) -> str | None:
     selection = json.loads(selection_path.read_text(encoding="utf-8"))
-    selected_artifact = selection.get("selected_artifact")
+    selected_artifact = selection.get("selected_artifact") or selection.get("selected_model")
     if not isinstance(selected_artifact, str) or not selected_artifact:
         return None
     return selected_artifact
@@ -373,7 +373,9 @@ def _hf_hub_download(*, repo_id: str, filename: str, revision: str | None) -> Pa
     try:
         from huggingface_hub import hf_hub_download
     except ImportError as exc:  # pragma: no cover - dependency is declared
-        raise RuntimeError("huggingface_hub is required to load router artifacts from the Hub") from exc
+        raise RuntimeError(
+            "huggingface_hub is required to load router artifacts from the Hub"
+        ) from exc
 
     return Path(
         hf_hub_download(

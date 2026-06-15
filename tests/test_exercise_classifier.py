@@ -15,7 +15,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pozify.contracts import PoseFrame, PoseSequence, UserProfile, validate_contract
-from pozify.ml.exercise_router_evaluation import evaluate_router_predictions, select_router_candidate
+from pozify.ml.exercise_router_evaluation import (
+    evaluate_router_predictions,
+    select_router_candidate,
+)
 from pozify.ml.exercise_router_features import (
     FEATURE_SCHEMA,
     ROUTER_LABELS,
@@ -83,7 +86,9 @@ def _set_landmark(
     )
 
 
-def _landmarks_for_exercise(exercise: str, phase: float, visibility: float) -> dict[str, dict[str, float]]:
+def _landmarks_for_exercise(
+    exercise: str, phase: float, visibility: float
+) -> dict[str, dict[str, float]]:
     landmarks = _base_landmarks(visibility)
     wave = (1.0 - math.cos(2.0 * math.pi * phase)) / 2.0
     if exercise == "squat":
@@ -118,12 +123,33 @@ def _landmarks_for_exercise(exercise: str, phase: float, visibility: float) -> d
     return landmarks
 
 
-def _sequence(exercise: str = "push_up", frame_count: int = 45, visibility: float = 0.95) -> PoseSequence:
+def _sequence(
+    exercise: str = "push_up", frame_count: int = 45, visibility: float = 0.95
+) -> PoseSequence:
     frames = [
         PoseFrame(
             frame_index=index,
             timestamp_sec=round(index / 30.0, 3),
             landmarks=_landmarks_for_exercise(exercise, index / 24.0, visibility),
+            world_landmarks={},
+            pose_quality={"mean_visibility": visibility, "normalized": True},
+        )
+        for index in range(frame_count)
+    ]
+    return PoseSequence(
+        frames=frames,
+        normalized=True,
+        smoothing_method="exponential_smoothing",
+        pose_valid_ratio=1.0 if visibility >= 0.2 else 0.4,
+    )
+
+
+def _static_sequence(frame_count: int = 45, visibility: float = 0.95) -> PoseSequence:
+    frames = [
+        PoseFrame(
+            frame_index=index,
+            timestamp_sec=round(index / 30.0, 3),
+            landmarks=_landmarks_for_exercise("push_up", 0.0, visibility),
             world_landmarks={},
             pose_quality={"mean_visibility": visibility, "normalized": True},
         )
@@ -195,11 +221,7 @@ class ExerciseRouterFeatureTests(unittest.TestCase):
                 frame.frame_index,
                 frame.timestamp_sec,
                 {
-                    name: {
-                        key: value
-                        for key, value in landmark.items()
-                        if key != "visibility"
-                    }
+                    name: {key: value for key, value in landmark.items() if key != "visibility"}
                     for name, landmark in frame.landmarks.items()
                 },
                 frame.world_landmarks,
@@ -222,8 +244,20 @@ class ExerciseRouterFeatureTests(unittest.TestCase):
 class ExerciseRouterAggregationTests(unittest.TestCase):
     def test_aggregates_confident_windows(self) -> None:
         predictions = [
-            WindowRouterPrediction(0.0, 1.0, "push_up", 0.91, {"squat": 0.03, "push_up": 0.91, "shoulder_press": 0.02, "unknown": 0.04}),
-            WindowRouterPrediction(0.5, 1.5, "push_up", 0.88, {"squat": 0.05, "push_up": 0.88, "shoulder_press": 0.02, "unknown": 0.05}),
+            WindowRouterPrediction(
+                0.0,
+                1.0,
+                "push_up",
+                0.91,
+                {"squat": 0.03, "push_up": 0.91, "shoulder_press": 0.02, "unknown": 0.04},
+            ),
+            WindowRouterPrediction(
+                0.5,
+                1.5,
+                "push_up",
+                0.88,
+                {"squat": 0.05, "push_up": 0.88, "shoulder_press": 0.02, "unknown": 0.05},
+            ),
         ]
 
         aggregated = aggregate_window_predictions(predictions)
@@ -234,13 +268,43 @@ class ExerciseRouterAggregationTests(unittest.TestCase):
 
     def test_low_confidence_and_inconsistent_windows_fallback_to_unknown(self) -> None:
         low_confidence = [
-            WindowRouterPrediction(0.0, 1.0, "push_up", 0.45, {"squat": 0.25, "push_up": 0.45, "shoulder_press": 0.15, "unknown": 0.15}),
-            WindowRouterPrediction(0.5, 1.5, "push_up", 0.48, {"squat": 0.22, "push_up": 0.48, "shoulder_press": 0.15, "unknown": 0.15}),
+            WindowRouterPrediction(
+                0.0,
+                1.0,
+                "push_up",
+                0.45,
+                {"squat": 0.25, "push_up": 0.45, "shoulder_press": 0.15, "unknown": 0.15},
+            ),
+            WindowRouterPrediction(
+                0.5,
+                1.5,
+                "push_up",
+                0.48,
+                {"squat": 0.22, "push_up": 0.48, "shoulder_press": 0.15, "unknown": 0.15},
+            ),
         ]
         inconsistent = [
-            WindowRouterPrediction(0.0, 1.0, "push_up", 0.8, {"squat": 0.05, "push_up": 0.8, "shoulder_press": 0.1, "unknown": 0.05}),
-            WindowRouterPrediction(0.5, 1.5, "squat", 0.8, {"squat": 0.8, "push_up": 0.05, "shoulder_press": 0.1, "unknown": 0.05}),
-            WindowRouterPrediction(1.0, 2.0, "shoulder_press", 0.8, {"squat": 0.1, "push_up": 0.05, "shoulder_press": 0.8, "unknown": 0.05}),
+            WindowRouterPrediction(
+                0.0,
+                1.0,
+                "push_up",
+                0.8,
+                {"squat": 0.05, "push_up": 0.8, "shoulder_press": 0.1, "unknown": 0.05},
+            ),
+            WindowRouterPrediction(
+                0.5,
+                1.5,
+                "squat",
+                0.8,
+                {"squat": 0.8, "push_up": 0.05, "shoulder_press": 0.1, "unknown": 0.05},
+            ),
+            WindowRouterPrediction(
+                1.0,
+                2.0,
+                "shoulder_press",
+                0.8,
+                {"squat": 0.1, "push_up": 0.05, "shoulder_press": 0.8, "unknown": 0.05},
+            ),
         ]
 
         self.assertTrue(aggregate_window_predictions(low_confidence).fallback_required)
@@ -275,6 +339,23 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
         self.assertEqual(result.exercise, "push_up")
         self.assertFalse(result.fallback_required)
 
+    def test_selection_file_accepts_legacy_selected_model_field(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir)
+            artifact_path = model_dir / "selected.joblib"
+            joblib.dump(_fake_router_artifact(), artifact_path)
+            (model_dir / "router_selection.json").write_text(
+                json.dumps({"selected_model": artifact_path.name}),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {HF_DISABLE_ENV: "1"}):
+                bundle = load_router_model(model_dir)
+
+        self.assertIsNotNone(bundle)
+        assert bundle is not None
+        self.assertEqual(bundle.labels, tuple(ROUTER_LABELS))
+
     def test_hf_loader_honors_selection_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             model_dir = Path(temp_dir)
@@ -289,7 +370,9 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
             def fake_download(*, repo_id: str, filename: str, revision: str | None) -> Path:
                 self.assertEqual(repo_id, "owner/pozify-router")
                 self.assertEqual(revision, "main")
-                return {"router_selection.json": selection_path, "router.joblib": artifact_path}[filename]
+                return {"router_selection.json": selection_path, "router.joblib": artifact_path}[
+                    filename
+                ]
 
             with patch(
                 "pozify.ml.exercise_router_inference._hf_hub_download",
@@ -316,7 +399,9 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
             def fake_download(*, repo_id: str, filename: str, revision: str | None) -> Path:
                 self.assertEqual(repo_id, DEFAULT_HF_REPO_ID)
                 self.assertIsNone(revision)
-                return {"router_selection.json": selection_path, "router.joblib": artifact_path}[filename]
+                return {"router_selection.json": selection_path, "router.joblib": artifact_path}[
+                    filename
+                ]
 
             with (
                 patch.dict(os.environ, {}, clear=True),
@@ -330,6 +415,48 @@ class ExerciseRouterModelLoadingTests(unittest.TestCase):
         self.assertIsNotNone(bundle)
         assert bundle is not None
         self.assertEqual(bundle.model_kind, "baseline")
+        self.assertEqual(bundle.labels, tuple(ROUTER_LABELS))
+
+    def test_hf_loader_reads_local_env_before_selecting_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            artifact_path = model_dir / "router.joblib"
+            selection_path = model_dir / "router_selection.json"
+            joblib.dump(_fake_router_artifact(), artifact_path)
+            selection_path.write_text(
+                json.dumps({"selected_artifact": artifact_path.name}),
+                encoding="utf-8",
+            )
+            (root / ".env").write_text(
+                "POZIFY_ROUTER_HF_REPO_ID=owner/env-router\n",
+                encoding="utf-8",
+            )
+            original_cwd = Path.cwd()
+
+            def fake_download(*, repo_id: str, filename: str, revision: str | None) -> Path:
+                self.assertEqual(repo_id, "owner/env-router")
+                self.assertIsNone(revision)
+                return {"router_selection.json": selection_path, "router.joblib": artifact_path}[
+                    filename
+                ]
+
+            try:
+                os.chdir(root)
+                with (
+                    patch.dict(os.environ, {}, clear=True),
+                    patch(
+                        "pozify.ml.exercise_router_inference._hf_hub_download",
+                        side_effect=fake_download,
+                    ),
+                ):
+                    bundle = load_router_model_from_hf()
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertIsNotNone(bundle)
+        assert bundle is not None
         self.assertEqual(bundle.labels, tuple(ROUTER_LABELS))
 
     def test_old_router_artifact_without_schema_is_rejected(self) -> None:
@@ -362,11 +489,26 @@ class ExerciseClassifierStepTests(unittest.TestCase):
         self.assertEqual(result.confidence, 0.98)
         validate_contract("exercise_classification.json", result)
 
-    def test_missing_model_falls_back_to_unknown(self) -> None:
+    def test_missing_model_uses_pose_heuristic_for_clear_motion(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch.dict(os.environ, {HF_DISABLE_ENV: "1"}):
                 result = exercise_classifier.run(
                     _sequence("push_up"),
+                    _profile("auto"),
+                    mock=False,
+                    model_dir=Path(temp_dir),
+                )
+
+        self.assertEqual(result.exercise, "push_up")
+        self.assertFalse(result.fallback_required)
+        self.assertGreaterEqual(result.confidence, 0.65)
+        validate_contract("exercise_classification.json", result)
+
+    def test_missing_model_keeps_static_motion_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.dict(os.environ, {HF_DISABLE_ENV: "1"}):
+                result = exercise_classifier.run(
+                    _static_sequence(),
                     _profile("auto"),
                     mock=False,
                     model_dir=Path(temp_dir),
