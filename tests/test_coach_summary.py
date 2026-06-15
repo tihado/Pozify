@@ -498,6 +498,45 @@ class CoachSummaryTests(unittest.TestCase):
 
         self.assertEqual(coach_summary._extract_json_object(output), payload)
 
+    def test_summary_from_payload_wraps_string_fields_instead_of_splitting_chars(self) -> None:
+        payload = {
+            "summary": "Structured summary.",
+            "what_you_did": "The athlete executed the squat with control.",
+            "what_looked_good": "Tempo stayed steady.",
+            "what_changed_across_reps": "Depth was similar across reps.",
+            "valid_variation_vs_issue": "No valid variation was overcorrected.",
+            "top_fixes": "Sit slightly deeper while staying controlled.",
+            "next_session_plan": "Repeat the set with slower reps.",
+            "confidence_notes": "Confidence is limited by the camera angle.",
+        }
+
+        summary = coach_summary._summary_from_payload(payload)
+
+        self.assertEqual(
+            summary.what_you_did,
+            ["The athlete executed the squat with control."],
+        )
+        self.assertEqual(summary.what_looked_good, ["Tempo stayed steady."])
+
+    def test_summary_from_payload_repairs_character_array_fields(self) -> None:
+        payload = {
+            "summary": "Structured summary.",
+            "what_you_did": list("The athlete executed the squat with control."),
+            "what_looked_good": ["Tempo stayed steady."],
+            "what_changed_across_reps": ["Depth was similar across reps."],
+            "valid_variation_vs_issue": ["No valid variation was overcorrected."],
+            "top_fixes": ["Sit slightly deeper while staying controlled."],
+            "next_session_plan": ["Repeat the set with slower reps."],
+            "confidence_notes": ["Confidence is limited by the camera angle."],
+        }
+
+        summary = coach_summary._summary_from_payload(payload)
+
+        self.assertEqual(
+            summary.what_you_did,
+            ["The athlete executed the squat with control."],
+        )
+
     def test_verifier_rejects_issue_not_in_json(self) -> None:
         summary = CoachSummary(
             summary="The strongest issue was `incomplete_depth`.",

@@ -115,6 +115,17 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     return payload
 
 
+def _summary_list_field(payload: dict[str, Any], key: str) -> list[str]:
+    value = payload[key]
+    if isinstance(value, str):
+        return [value]
+    if not isinstance(value, list):
+        raise ValueError(f"Coach summary model output field {key!r} must be a string array")
+    if len(value) >= 8 and all(isinstance(item, str) and len(item) <= 1 for item in value):
+        return ["".join(value)]
+    return [str(item) for item in value]
+
+
 def _summary_from_payload(payload: dict[str, Any]) -> CoachSummary:
     missing_fields = sorted(_SUMMARY_KEYS.difference(payload))
     if missing_fields:
@@ -124,13 +135,13 @@ def _summary_from_payload(payload: dict[str, Any]) -> CoachSummary:
         )
     summary = CoachSummary(
         summary=str(payload["summary"]),
-        what_you_did=[str(item) for item in payload["what_you_did"]],
-        what_looked_good=[str(item) for item in payload["what_looked_good"]],
-        what_changed_across_reps=[str(item) for item in payload["what_changed_across_reps"]],
-        valid_variation_vs_issue=[str(item) for item in payload["valid_variation_vs_issue"]],
-        top_fixes=[str(item) for item in payload["top_fixes"]],
-        next_session_plan=[str(item) for item in payload["next_session_plan"]],
-        confidence_notes=[str(item) for item in payload["confidence_notes"]],
+        what_you_did=_summary_list_field(payload, "what_you_did"),
+        what_looked_good=_summary_list_field(payload, "what_looked_good"),
+        what_changed_across_reps=_summary_list_field(payload, "what_changed_across_reps"),
+        valid_variation_vs_issue=_summary_list_field(payload, "valid_variation_vs_issue"),
+        top_fixes=_summary_list_field(payload, "top_fixes"),
+        next_session_plan=_summary_list_field(payload, "next_session_plan"),
+        confidence_notes=_summary_list_field(payload, "confidence_notes"),
     )
     validate_contract("coach_summary.json", summary)
     return summary
