@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 
 from pozify.env import env_truthy, load_local_env
-from pozify.hf_spaces import default_spaces_gpu_duration, spaces_gpu
+from pozify.hf_spaces import default_spaces_gpu_duration, spaces_gpu, zero_gpu_enabled
 
 
 PROVIDER_ENV = "POZIFY_COACH_SUMMARY_PROVIDER"
@@ -17,8 +17,8 @@ BASE_MODEL_ENV = "POZIFY_COACH_SUMMARY_BASE_MODEL"
 LOCAL_MODEL_DIR_ENV = "POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR"
 ADAPTER_ENV = "POZIFY_COACH_SUMMARY_ADAPTER_ID"
 DISABLE_REMOTE_ENV = "POZIFY_COACH_SUMMARY_DISABLE_REMOTE"
-ALLOW_LOCAL_TRANSFORMERS_ON_SPACES_ENV = "POZIFY_ALLOW_LOCAL_TRANSFORMERS_ON_SPACES"
 MAX_TOKENS_ENV = "POZIFY_COACH_SUMMARY_MAX_TOKENS"
+MAX_INPUT_TOKENS_ENV = "POZIFY_COACH_SUMMARY_MAX_INPUT_TOKENS"
 TEMPERATURE_ENV = "POZIFY_COACH_SUMMARY_TEMPERATURE"
 HF_TOKEN_ENV = "HF_TOKEN"
 LLAMA_CPP_BASE_URL_ENV = "POZIFY_LLAMA_CPP_BASE_URL"
@@ -27,6 +27,8 @@ LLAMA_CPP_TIMEOUT_ENV = "POZIFY_LLAMA_CPP_TIMEOUT"
 DEFAULT_PROVIDER = "hf_inference"
 DEFAULT_MODEL = "build-small-hackathon/pozify-coach-summary1"
 DEFAULT_LLAMA_CPP_BASE_URL = "http://127.0.0.1:8080"
+DEFAULT_MAX_INPUT_TOKENS = 2048
+NEMOTRON_NAIVE_MAX_INPUT_TOKENS = 128
 LOCAL_TRANSFORMERS_PROVIDER = "local_transformers"
 LOCAL_TRANSFORMERS_ALIASES = {LOCAL_TRANSFORMERS_PROVIDER, "local", "transformers"}
 LLAMA_CPP_PROVIDER = "llama_cpp"
@@ -73,14 +75,13 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _running_on_hf_space() -> bool:
-    return bool(os.getenv("SPACE_ID") or os.getenv("SPACE_HOST"))
-
-
-def _local_transformers_allowed_on_spaces() -> bool:
-    return not _running_on_hf_space() or env_truthy(
-        os.getenv(ALLOW_LOCAL_TRANSFORMERS_ON_SPACES_ENV)
-    )
+def _configured_provider() -> str:
+    configured_provider = os.getenv(PROVIDER_ENV)
+    if configured_provider:
+        return configured_provider.strip().lower()
+    if zero_gpu_enabled():
+        return LOCAL_TRANSFORMERS_PROVIDER
+    return DEFAULT_PROVIDER
 
 
 class HFInferenceCoachSummaryModel:
@@ -206,12 +207,13 @@ def _load_local_transformers_backend(model: str, token: str | None) -> tuple[Any
             "transformers and torch are required for local coach summary inference"
         ) from exc
 
-    tokenizer = AutoTokenizer.from_pretrained(model, token=token)
+    tokenizer = AutoTokenizer.from_pretrained(model, token=token, trust_remote_code=True)
     language_model = AutoModelForCausalLM.from_pretrained(
         model,
         device_map="auto",
         dtype="auto",
         token=token,
+        trust_remote_code=True,
     )
     language_model.eval()
 
@@ -231,12 +233,73 @@ def _local_transformers_device(language_model: Any) -> Any:
         raise RuntimeError("Local coach summary model has no parameters") from exc
 
 
+def _move_model_inputs_to_device(model_inputs: Any, device: Any) -> Any:
+    if hasattr(model_inputs, "to"):
+        return model_inputs.to(device)
+    return {
+        key: value.to(device) if hasattr(value, "to") else value
+        for key, value in model_inputs.items()
+    }
+
+
+def _nemotron_fast_kernels_available(language_model: Any) -> bool:
+    model_type = getattr(getattr(language_model, "config", None), "model_type", None)
+    if model_type != "nemotron_h":
+        return True
+
+    try:
+        from transformers.models.nemotron_h import modeling_nemotron_h
+    except Exception:
+        return False
+
+    required_kernel_names = (
+        "selective_state_update",
+        "causal_conv1d_fn",
+        "causal_conv1d_update",
+    )
+    return all(getattr(modeling_nemotron_h, name, None) is not None for name in required_kernel_names)
+
+
+def _tokenize_local_chat(
+    *,
+    tokenizer: Any,
+    messages: list[dict[str, str]],
+    max_input_tokens: int,
+) -> Any:
+    if hasattr(tokenizer, "apply_chat_template"):
+        template_kwargs: dict[str, Any] = {
+            "tokenize": True,
+            "add_generation_prompt": True,
+            "return_tensors": "pt",
+            "return_dict": True,
+            "truncation": True,
+            "max_length": max_input_tokens,
+        }
+        try:
+            return tokenizer.apply_chat_template(
+                messages,
+                enable_thinking=False,
+                **template_kwargs,
+            )
+        except TypeError:
+            return tokenizer.apply_chat_template(messages, **template_kwargs)
+
+    text = "\n\n".join(f"{message['role']}: {message['content']}" for message in messages)
+    return tokenizer(
+        [text],
+        return_tensors="pt",
+        truncation=True,
+        max_length=max_input_tokens,
+    )
+
+
 @spaces_gpu(duration=_gpu_duration)
 def _generate_local_transformers_summary(
     *,
     model: str,
     prompt: str,
     max_tokens: int,
+    max_input_tokens: int,
     temperature: float,
     token: str | None,
 ) -> str:
@@ -246,6 +309,9 @@ def _generate_local_transformers_summary(
         raise RuntimeError("torch is required for local coach summary inference") from exc
 
     tokenizer, language_model = _load_local_transformers_backend(model, token)
+    if not _nemotron_fast_kernels_available(language_model):
+        max_input_tokens = min(max_input_tokens, NEMOTRON_NAIVE_MAX_INPUT_TOKENS)
+
     messages = [
         {
             "role": "system",
@@ -256,17 +322,15 @@ def _generate_local_transformers_summary(
             "content": prompt,
         },
     ]
-    if hasattr(tokenizer, "apply_chat_template"):
-        text = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-    else:
-        text = "\n\n".join(f"{message['role']}: {message['content']}" for message in messages)
-
-    inputs = tokenizer([text], return_tensors="pt")
-    model_inputs = inputs.to(_local_transformers_device(language_model))
+    inputs = _tokenize_local_chat(
+        tokenizer=tokenizer,
+        messages=messages,
+        max_input_tokens=max_input_tokens,
+    )
+    model_inputs = _move_model_inputs_to_device(
+        inputs,
+        _local_transformers_device(language_model),
+    )
     generation_kwargs: dict[str, Any] = {
         "max_new_tokens": max_tokens,
         "do_sample": temperature > 0,
@@ -293,6 +357,7 @@ class LocalTransformersCoachSummaryModel:
         *,
         model: str = DEFAULT_MODEL,
         max_tokens: int = 700,
+        max_input_tokens: int = DEFAULT_MAX_INPUT_TOKENS,
         temperature: float = 0.1,
         token: str | None = None,
         base_model: str | None = None,
@@ -300,6 +365,7 @@ class LocalTransformersCoachSummaryModel:
     ) -> None:
         self.model = model
         self.max_tokens = max_tokens
+        self.max_input_tokens = max_input_tokens
         self.temperature = temperature
         self.token = token
         self.base_model = base_model
@@ -310,6 +376,7 @@ class LocalTransformersCoachSummaryModel:
             model=self.model,
             prompt=prompt,
             max_tokens=self.max_tokens,
+            max_input_tokens=self.max_input_tokens,
             temperature=self.temperature,
             token=self.token,
         )
@@ -398,25 +465,17 @@ def get_coach_summary_model() -> CoachSummaryModel | None:
 
     local_model_dir = os.getenv(LOCAL_MODEL_DIR_ENV)
     if local_model_dir:
-        if not _local_transformers_allowed_on_spaces():
-            if env_truthy(os.getenv(DISABLE_REMOTE_ENV)):
-                return None
-            return HFInferenceCoachSummaryModel(
-                model=os.getenv(MODEL_ENV, DEFAULT_MODEL),
-                max_tokens=_env_int(MAX_TOKENS_ENV, 700),
-                temperature=_env_float(TEMPERATURE_ENV, 0.1),
-                token=os.getenv(HF_TOKEN_ENV),
-            )
         return LocalTransformersCoachSummaryModel(
             model=local_model_dir,
             max_tokens=_env_int(MAX_TOKENS_ENV, 700),
+            max_input_tokens=_env_int(MAX_INPUT_TOKENS_ENV, DEFAULT_MAX_INPUT_TOKENS),
             temperature=_env_float(TEMPERATURE_ENV, 0.1),
             token=os.getenv(HF_TOKEN_ENV),
             base_model=os.getenv(BASE_MODEL_ENV),
             adapter_id=os.getenv(ADAPTER_ENV),
         )
 
-    provider = os.getenv(PROVIDER_ENV, DEFAULT_PROVIDER).strip().lower()
+    provider = _configured_provider()
     if provider == "hf_inference":
         if env_truthy(os.getenv(DISABLE_REMOTE_ENV)):
             return None
@@ -428,18 +487,10 @@ def get_coach_summary_model() -> CoachSummaryModel | None:
         )
 
     if provider in LOCAL_TRANSFORMERS_ALIASES:
-        if not _local_transformers_allowed_on_spaces():
-            if env_truthy(os.getenv(DISABLE_REMOTE_ENV)):
-                return None
-            return HFInferenceCoachSummaryModel(
-                model=os.getenv(MODEL_ENV, DEFAULT_MODEL),
-                max_tokens=_env_int(MAX_TOKENS_ENV, 700),
-                temperature=_env_float(TEMPERATURE_ENV, 0.1),
-                token=os.getenv(HF_TOKEN_ENV),
-            )
         return LocalTransformersCoachSummaryModel(
             model=os.getenv(MODEL_ENV, DEFAULT_MODEL),
             max_tokens=_env_int(MAX_TOKENS_ENV, 700),
+            max_input_tokens=_env_int(MAX_INPUT_TOKENS_ENV, DEFAULT_MAX_INPUT_TOKENS),
             temperature=_env_float(TEMPERATURE_ENV, 0.1),
             token=os.getenv(HF_TOKEN_ENV),
         )

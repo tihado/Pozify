@@ -246,20 +246,27 @@ inference is unavailable or the model output fails validation.
 
 Recommended if you want the live Space or local demo to behave predictably during judging.
 
-For Hugging Face Spaces, keep the provider on hosted inference unless you have a dedicated local
-model runtime:
+For regular Hugging Face Spaces, keep the provider on hosted inference unless you have a dedicated
+local model runtime:
 
 ```bash
 POZIFY_COACH_SUMMARY_PROVIDER=hf_inference
 POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
 ```
 
-Local Transformers inference is disabled on Spaces by default because large merged models can hit
-CUDA/runtime failures during generation. To opt in deliberately, set:
+For Hugging Face ZeroGPU Spaces, local Transformers is selected automatically so the app does not
+call the hosted Hugging Face Inference API. You can also set it explicitly:
 
 ```bash
-POZIFY_ALLOW_LOCAL_TRANSFORMERS_ON_SPACES=1
+POZIFY_COACH_SUMMARY_PROVIDER=local_transformers
+POZIFY_COACH_SUMMARY_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
+POZIFY_SPACES_GPU_DURATION=300
 ```
+
+`HF_TOKEN` is only needed for `hf_inference` or for downloading a private/gated local model repo.
+Nemotron uses Mamba layers; the Space installs `causal-conv1d` and `mamba-ssm` so Transformers can
+use the fast kernels. If those kernels are unavailable at runtime, Pozify caps the local prompt
+context before generation to avoid the slow naive Mamba path crashing CUDA.
 
 ### 2. Use the fine-tuned merged model locally
 
@@ -277,10 +284,10 @@ dedicated inference endpoint.
 
 ### 3. Base cloud model override
 
-If you need the previous base-model runtime:
+If you need the Nemotron base-model runtime:
 
 ```bash
-export POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
+export POZIFY_COACH_SUMMARY_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
 uv run python app.py
 ```
 
@@ -293,7 +300,7 @@ Example:
 
 ```bash
 llama-server \
-  --model /path/to/qwen3-14b-instruct.gguf \
+  --model /path/to/nemotron-3-nano-4b.gguf \
   --ctx-size 4096 \
   --n-gpu-layers 99 \
   --host 127.0.0.1 \
@@ -304,7 +311,7 @@ Then:
 
 ```bash
 POZIFY_COACH_SUMMARY_PROVIDER=llama_cpp \
-POZIFY_COACH_SUMMARY_MODEL=local-qwen3-14b-gguf \
+POZIFY_COACH_SUMMARY_MODEL=local-nemotron-3-nano-4b-gguf \
 POZIFY_LLAMA_CPP_BASE_URL=http://127.0.0.1:8080 \
 POZIFY_COACH_SUMMARY_MAX_TOKENS=700 \
 uv run python app.py
@@ -319,7 +326,7 @@ uv run python app.py
 | `POZIFY_COACH_SUMMARY_PROVIDER`             | `hf_inference`, `local_transformers`, or `llama_cpp`.             |
 | `POZIFY_COACH_SUMMARY_MODEL`                | Coach model id or llama.cpp model alias.                          |
 | `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`      | Prefer a local merged/model directory for coach summary.          |
-| `POZIFY_ALLOW_LOCAL_TRANSFORMERS_ON_SPACES` | Allow local Transformers generation on HF Spaces. Default is off. |
+| `POZIFY_COACH_SUMMARY_MAX_INPUT_TOKENS`     | Max local Transformers prompt tokens, default `2048`.             |
 | `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER`      | Keep model output even when verifier fails.                       |
 
 ## Exercise Router Training

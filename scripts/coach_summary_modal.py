@@ -48,18 +48,34 @@ HF_DATA_FILENAMES = (
 TRAINING_GPU = "A100-80GB"
 
 image = (
-    modal.Image.debian_slim(python_version="3.10")
-    .apt_install("git")
+    modal.Image.from_registry(
+        "nvidia/cuda:13.0.0-devel-ubuntu22.04",
+        add_python="3.10",
+    )
+    .apt_install("build-essential", "git", "ninja-build")
+    .env(
+        {
+            "CC": "/usr/bin/gcc",
+            "CXX": "/usr/bin/g++",
+            "CUDA_HOME": "/usr/local/cuda",
+            "MAX_JOBS": "4",
+            "TORCH_CUDA_ARCH_LIST": "8.0",
+        }
+    )
     .pip_install(
-        "accelerate>=0.34.0",
-        "bitsandbytes>=0.43.1",
+        "accelerate==1.14.0",
+        "bitsandbytes>=0.48.0",
         "datasets>=2.20.0",
         "huggingface-hub>=0.24.0",
-        "peft>=0.12.0",
-        "torch>=2.4.0",
-        "transformers>=4.44.0",
-        "trl>=0.10.1",
+        "packaging>=24.0",
+        "peft==0.12.0",
+        "setuptools>=69.0.0",
+        "torch==2.11.0",
+        "transformers==5.12.0",
+        "wheel>=0.43.0",
     )
+    .pip_install("causal-conv1d>=1.5.0", extra_options="--no-build-isolation")
+    .pip_install("mamba-ssm>=2.2.4", extra_options="--no-build-isolation")
     .add_local_dir("src", "/root/src", copy=True)
     .add_local_dir("data", "/root/data", copy=True)
     .add_local_dir("configs", "/root/configs", copy=True)
@@ -171,6 +187,16 @@ def _load_config(*, include_saved_training_config: bool = True) -> dict[str, Any
     if include_saved_training_config and TRAINING_CONFIG_PATH.exists():
         config.update(_read_json(TRAINING_CONFIG_PATH))
     return config
+
+
+def _make_generation_config_greedy(model: Any) -> None:
+    generation_config = getattr(model, "generation_config", None)
+    if generation_config is None:
+        return
+    generation_config.do_sample = False
+    for name in ("temperature", "top_p", "top_k", "typical_p", "epsilon_cutoff", "eta_cutoff"):
+        if hasattr(generation_config, name):
+            setattr(generation_config, name, None)
 
 
 def _render_messages(messages: list[dict[str, str]]) -> str:
@@ -433,11 +459,10 @@ def train(
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     import torch
     from datasets import Dataset
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from peft import LoraConfig, get_peft_model
     from transformers import (
         AutoModelForCausalLM,
         AutoTokenizer,
-        BitsAndBytesConfig,
         DataCollatorForLanguageModeling,
         Trainer,
         TrainingArguments,
@@ -513,14 +538,7 @@ def train(
     train_dataset = Dataset.from_list(tokenized_training_rows)
     eval_dataset = Dataset.from_list(tokenized_eval_rows)
 
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
     model_kwargs: dict[str, Any] = {
-        "quantization_config": quantization_config,
         "dtype": torch.bfloat16,
         "device_map": "auto",
         "attn_implementation": "sdpa",
@@ -555,10 +573,6 @@ def train(
         ],
     )
 
-    prepare_kwargs: dict[str, Any] = {}
-    if _supports_kwarg(prepare_model_for_kbit_training, "use_gradient_checkpointing"):
-        prepare_kwargs["use_gradient_checkpointing"] = True
-    model = prepare_model_for_kbit_training(model, **prepare_kwargs)
     model = get_peft_model(model, peft_config)
 
     adapter_dir = MODEL_ROOT / output_subdir
@@ -636,7 +650,7 @@ def evaluate(
 ) -> dict[str, Any]:
     import torch
     from peft import PeftModel
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     sys.path.insert(0, "/root/src")
     from pozify.steps import verifier
@@ -656,15 +670,8 @@ def evaluate(
     tokenizer = AutoTokenizer.from_pretrained(str(config["base_model"]))
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
     base_model = AutoModelForCausalLM.from_pretrained(
         str(config["base_model"]),
-        quantization_config=quantization_config,
         dtype=torch.bfloat16,
         device_map="auto",
     )
@@ -808,6 +815,7 @@ def merge(
     )
     model = PeftModel.from_pretrained(base_model, str(adapter_dir))
     merged_model = model.merge_and_unload()
+    _make_generation_config_greedy(merged_model)
     merged_model.save_pretrained(str(merged_dir), safe_serialization=True)
     tokenizer.save_pretrained(str(merged_dir))
 

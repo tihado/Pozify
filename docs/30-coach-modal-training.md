@@ -165,12 +165,12 @@ export POZIFY_COACH_SUMMARY_ADAPTER_ID=build-small-hackathon/pozify-coach-summar
 uv run python app.py
 ```
 
-### Previous base-model runtime
+### Base-model runtime
 
-If you need to force the previous base model:
+If you need to force the Nemotron base model:
 
 ```bash
-export POZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B
+export POZIFY_COACH_SUMMARY_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
 ```
 
 The fine-tuned model may still fall back if hosted inference is unavailable or returns invalid JSON,

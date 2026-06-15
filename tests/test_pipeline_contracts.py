@@ -264,7 +264,7 @@ class PipelineContractTests(unittest.TestCase):
                 return_value=CoachSummaryResult(
                     summary=model_summary,
                     provider="hf_inference",
-                    model="Qwen/Qwen3-14B",
+                    model="nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
                     source="model_or_local",
                 ),
             ),
@@ -281,7 +281,7 @@ class PipelineContractTests(unittest.TestCase):
         self.assertEqual(report["artifacts"]["coach_summary_provider"], "hf_inference")
         self.assertEqual(
             report["artifacts"]["coach_summary_model"],
-            "Qwen/Qwen3-14B",
+            "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
         )
         self.assertTrue(report["artifacts"]["coach_summary_verifier_bypassed"])
         self.assertTrue(report["verification"]["passed"])

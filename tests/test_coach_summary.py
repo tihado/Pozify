@@ -56,7 +56,7 @@ class _GoodModel:
                 '"confidence_notes":["Confidence is limited."]}'
             ),
             provider="hf_inference",
-            model="Qwen/Qwen3-14B",
+            model="nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
         )
 
 
@@ -159,7 +159,8 @@ class CoachSummaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             env_path = Path(temp_dir) / ".env"
             env_path.write_text(
-                "HF_TOKEN=test-token\nPOZIFY_COACH_SUMMARY_MODEL=Qwen/Qwen3-14B\n",
+                "HF_TOKEN=test-token\n"
+                "POZIFY_COACH_SUMMARY_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16\n",
                 encoding="utf-8",
             )
             with patch.dict(os.environ, {}, clear=True):
@@ -173,7 +174,7 @@ class CoachSummaryTests(unittest.TestCase):
                 self.assertEqual(os.getenv("HF_TOKEN"), "test-token")
                 self.assertEqual(
                     os.getenv("POZIFY_COACH_SUMMARY_MODEL"),
-                    "Qwen/Qwen3-14B",
+                    "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
                 )
 
     def test_get_coach_summary_model_can_use_local_transformers_provider(self) -> None:
@@ -183,7 +184,7 @@ class CoachSummaryTests(unittest.TestCase):
                 os.environ,
                 {
                     "POZIFY_COACH_SUMMARY_PROVIDER": "local_transformers",
-                    "POZIFY_COACH_SUMMARY_MODEL": "Qwen/Qwen2.5-7B-Instruct",
+                    "POZIFY_COACH_SUMMARY_MODEL": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
                     "POZIFY_COACH_SUMMARY_MAX_TOKENS": "123",
                     "POZIFY_COACH_SUMMARY_TEMPERATURE": "0",
                 },
@@ -202,12 +203,13 @@ class CoachSummaryTests(unittest.TestCase):
             generation = provider.generate_summary("coach prompt")
 
         self.assertEqual(generation.provider, "local_transformers")
-        self.assertEqual(generation.model, "Qwen/Qwen2.5-7B-Instruct")
+        self.assertEqual(generation.model, "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16")
         self.assertEqual(generation.text, local_payload)
         generate.assert_called_once_with(
-            model="Qwen/Qwen2.5-7B-Instruct",
+            model="nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
             prompt="coach prompt",
             max_tokens=123,
+            max_input_tokens=2048,
             temperature=0.0,
             token=None,
         )
@@ -230,7 +232,7 @@ class CoachSummaryTests(unittest.TestCase):
                 os.environ,
                 {
                     "POZIFY_COACH_SUMMARY_PROVIDER": "llama_cpp",
-                    "POZIFY_COACH_SUMMARY_MODEL": "local-qwen2.5-7b-gguf",
+                    "POZIFY_COACH_SUMMARY_MODEL": "local-nemotron-3-nano-4b-gguf",
                     "POZIFY_COACH_SUMMARY_MAX_TOKENS": "321",
                     "POZIFY_COACH_SUMMARY_TEMPERATURE": "0",
                     "POZIFY_LLAMA_CPP_BASE_URL": "http://127.0.0.1:8090",
@@ -251,7 +253,7 @@ class CoachSummaryTests(unittest.TestCase):
             generation = provider.generate_summary("coach prompt")
 
         self.assertEqual(generation.provider, "llama_cpp")
-        self.assertEqual(generation.model, "local-qwen2.5-7b-gguf")
+        self.assertEqual(generation.model, "local-nemotron-3-nano-4b-gguf")
         self.assertEqual(generation.text, '{"summary":"ok"}')
         request = urlopen.call_args.args[0]
         self.assertEqual(request.full_url, "http://127.0.0.1:8090/v1/chat/completions")
@@ -414,7 +416,7 @@ class CoachSummaryTests(unittest.TestCase):
         )
 
         self.assertEqual(result.provider, "hf_inference")
-        self.assertEqual(result.model, "Qwen/Qwen3-14B")
+        self.assertEqual(result.model, "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16")
         self.assertEqual(result.source, "model_or_local")
 
     def test_verifier_rejects_issue_not_in_json(self) -> None:

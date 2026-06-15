@@ -110,9 +110,10 @@ def build_coach_summary_prompt(
         ],
         "schema": expected_schema,
     }
+    json_dump_kwargs = {"ensure_ascii": False, "separators": (",", ":")}
     return "\n\n".join(
         [
-            json.dumps(instructions, ensure_ascii=False, indent=2),
-            json.dumps(evidence, ensure_ascii=False, indent=2),
+            json.dumps(instructions, **json_dump_kwargs),
+            json.dumps(evidence, **json_dump_kwargs),
         ]
     )

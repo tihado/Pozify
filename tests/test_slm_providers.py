@@ -21,7 +21,7 @@ class SlmProviderTests(unittest.TestCase):
             os.environ,
             {
                 "POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR": "/tmp/local-model",
-                "POZIFY_COACH_SUMMARY_BASE_MODEL": "Qwen/Qwen3-14B",
+                "POZIFY_COACH_SUMMARY_BASE_MODEL": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
                 "POZIFY_COACH_SUMMARY_ADAPTER_ID": "pozify/coach-summary-lora",
             },
             clear=True,
@@ -30,7 +30,7 @@ class SlmProviderTests(unittest.TestCase):
 
         self.assertIsInstance(model, LocalTransformersCoachSummaryModel)
 
-    def test_hf_space_local_dir_falls_back_to_hf_inference_by_default(self) -> None:
+    def test_hf_space_local_dir_uses_local_transformers(self) -> None:
         with patch.dict(
             os.environ,
             {
@@ -42,10 +42,9 @@ class SlmProviderTests(unittest.TestCase):
         ):
             model = get_coach_summary_model()
 
-        self.assertIsInstance(model, HFInferenceCoachSummaryModel)
-        self.assertEqual(model.model, "build-small-hackathon/pozify-coach-summary1")
+        self.assertIsInstance(model, LocalTransformersCoachSummaryModel)
 
-    def test_hf_space_local_transformers_provider_requires_explicit_opt_in(self) -> None:
+    def test_hf_space_local_transformers_provider_uses_local_transformers(self) -> None:
         with patch.dict(
             os.environ,
             {
@@ -57,16 +56,14 @@ class SlmProviderTests(unittest.TestCase):
         ):
             model = get_coach_summary_model()
 
-        self.assertIsInstance(model, HFInferenceCoachSummaryModel)
+        self.assertIsInstance(model, LocalTransformersCoachSummaryModel)
 
-    def test_hf_space_can_opt_in_to_local_transformers_provider(self) -> None:
+    def test_zero_gpu_defaults_to_local_transformers_without_api_key(self) -> None:
         with patch.dict(
             os.environ,
             {
-                "SPACE_ID": "owner/space",
-                "POZIFY_ALLOW_LOCAL_TRANSFORMERS_ON_SPACES": "1",
-                "POZIFY_COACH_SUMMARY_PROVIDER": "local_transformers",
-                "POZIFY_COACH_SUMMARY_MODEL": "Qwen/Qwen2.5-7B-Instruct",
+                "SPACES_ZERO_GPU": "1",
+                "POZIFY_COACH_SUMMARY_MODEL": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
             },
             clear=True,
         ):
@@ -74,11 +71,39 @@ class SlmProviderTests(unittest.TestCase):
 
         self.assertIsInstance(model, LocalTransformersCoachSummaryModel)
 
+    def test_local_transformers_uses_configured_max_input_tokens(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "POZIFY_COACH_SUMMARY_PROVIDER": "local_transformers",
+                "POZIFY_COACH_SUMMARY_MODEL": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
+                "POZIFY_COACH_SUMMARY_MAX_INPUT_TOKENS": "512",
+            },
+            clear=True,
+        ):
+            model = get_coach_summary_model()
+
+        self.assertIsInstance(model, LocalTransformersCoachSummaryModel)
+        self.assertEqual(model.max_input_tokens, 512)
+
+    def test_regular_hf_space_defaults_to_remote_inference(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "SPACE_ID": "owner/space",
+                "POZIFY_COACH_SUMMARY_MODEL": "build-small-hackathon/pozify-coach-summary1",
+            },
+            clear=True,
+        ):
+            model = get_coach_summary_model()
+
+        self.assertIsInstance(model, HFInferenceCoachSummaryModel)
+
     def test_returns_hf_inference_model_when_remote_enabled(self) -> None:
         with patch.dict(
             os.environ,
             {
-                "POZIFY_COACH_SUMMARY_MODEL": "Qwen/Qwen3-14B",
+                "POZIFY_COACH_SUMMARY_MODEL": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
             },
             clear=True,
         ):

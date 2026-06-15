@@ -164,11 +164,11 @@ Subtle overlays or callouts:
 
 - Hugging Face Spaces
 - ZeroGPU
-- Hugging Face Inference
+- local Nemotron coach model
 - Hugging Face Hub
 
 Voiceover:
-"We also leaned into the Hugging Face ecosystem to make this real. Pozify runs beautifully in Hugging Face Spaces, uses ZeroGPU for demo-ready compute, calls Hugging Face Inference for the coaching model, and loads our exercise router through Hugging Face Hub."
+"We also leaned into the Hugging Face ecosystem to make this real. Pozify runs beautifully in Hugging Face Spaces, uses ZeroGPU for demo-ready compute, runs a local Nemotron coach model, and loads our exercise router through Hugging Face Hub."
 
 ### Scene 7: Return To Characters
 

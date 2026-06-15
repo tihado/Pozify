@@ -41,7 +41,7 @@ video + user profile
 -> variation detector
 -> issue markers
 -> annotated video
--> Qwen coach summary
+-> Nemotron coach summary
 -> deterministic verifier
 -> final report
 ```
@@ -58,9 +58,9 @@ pretending every video is one of the supported movements.
 | Exercise router | Custom PyTorch BiLSTM | Tiny trainable temporal model over pose windows. |
 | Baseline router | scikit-learn HistGradientBoostingClassifier | Strong baseline over engineered vectors and fallback artifact. |
 | Coach summary | build-small-hackathon/pozify-coach-summary1 | Current default fine-tuned runtime for structured JSON explanation. |
-| llama.cpp path | Qwen3-14B Instruct GGUF via `llama-server` | Local-first/off-grid coach summary path with GPU offload. |
+| llama.cpp path | Nemotron-3-Nano-4B GGUF via `llama-server` | Local-first/off-grid coach summary path with GPU offload. |
 
-The original hackathon build trained the exercise router first and used Qwen as a grounded
+The original hackathon build trained the exercise router first and used Nemotron as a grounded
 summarizer over JSON evidence. The current codebase now also contains a coach-summary LoRA / merged
 model training path on Modal.
 
@@ -213,11 +213,12 @@ logic stay outside the GPU worker. Useful settings:
 
 ```bash
 POZIFY_COACH_SUMMARY_PROVIDER=local_transformers
-POZIFY_COACH_SUMMARY_MODEL=build-small-hackathon/pozify-coach-summary1
+POZIFY_COACH_SUMMARY_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
 POZIFY_SPACES_GPU_DURATION=300
 ```
 
-This keeps the app inside the small-model budget while avoiding a separate proprietary model API.
+This keeps the app inside the small-model budget while avoiding the hosted Hugging Face Inference
+API.
 
 ### llama.cpp
 
@@ -228,7 +229,7 @@ Start llama.cpp with a local GGUF:
 
 ```bash
 llama-server \
-  --model /path/to/qwen3-14b-instruct-q4_k_m.gguf \
+  --model /path/to/nemotron-3-nano-4b-q4_k_m.gguf \
   --ctx-size 4096 \
   --n-gpu-layers 99 \
   --host 127.0.0.1 \
@@ -239,7 +240,7 @@ Or use a Hugging Face GGUF repo:
 
 ```bash
 llama-server \
-  --hf-repo owner/qwen3-14b-instruct-gguf:Q4_K_M \
+  --hf-repo owner/nemotron-3-nano-4b-gguf:Q4_K_M \
   --ctx-size 4096 \
   --n-gpu-layers 99 \
   --host 127.0.0.1 \
@@ -250,7 +251,7 @@ Then point Pozify at it:
 
 ```bash
 POZIFY_COACH_SUMMARY_PROVIDER=llama_cpp \
-POZIFY_COACH_SUMMARY_MODEL=local-qwen3-14b-gguf \
+POZIFY_COACH_SUMMARY_MODEL=local-nemotron-3-nano-4b-gguf \
 POZIFY_LLAMA_CPP_BASE_URL=http://127.0.0.1:8080 \
 uv run python app.py
 ```
@@ -267,8 +268,8 @@ but it would not solve exercise recognition or timestamped evidence.
 The chosen split was:
 
 - train a small router where labels and metrics are measurable;
-- keep Qwen as a general instruction model;
-- constrain Qwen with structured evidence JSON and knowledge cards;
+- keep Nemotron as a general instruction model;
+- constrain Nemotron with structured evidence JSON and knowledge cards;
 - run deterministic verification after generation.
 
 This makes the app easier to debug. If the router is wrong, inspect `exercise_classification.json`.
@@ -310,7 +311,7 @@ the intermediate evidence.
 - Current metrics are based on the cached router-window dataset, not a large independent benchmark.
 - The app relies on usable pose extraction and reasonable camera framing.
 - Per-rep issue rules are transparent but not biomechanically exhaustive.
-- Qwen is not fine-tuned; it is prompted and verified.
+- Nemotron is not fine-tuned; it is prompted and verified.
 - The llama.cpp path depends on a separately running `llama-server`.
 - This is not medical or clinical software.
 

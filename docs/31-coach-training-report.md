@@ -12,7 +12,7 @@ in the app.
 The current training stack is:
 
 - Base model: `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16`
-- Fine-tuning method: LoRA / QLoRA-style SFT on Modal
+- Fine-tuning method: BF16 LoRA SFT on Modal
 - Training target: Pozify-native structured summary generation
 - Runtime fallback: deterministic conservative summary when model generation fails or verification fails
 
@@ -158,7 +158,7 @@ The full training pipeline is implemented in `scripts/coach_summary_modal.py` wi
 
 The training stage:
 
-- loads the base model with 4-bit quantization
+- loads the base model in BF16 so Nemotron-H Mamba fast kernels receive regular projection weights
 - tokenizes and truncates rows explicitly before training so long JSON evidence rows cannot bypass
   the sequence-length cap
 - fine-tunes the LoRA adapter with the Transformers `Trainer`
@@ -285,7 +285,7 @@ The app runtime defaults to the fine-tuned coach-summary model:
 
 The deterministic fallback summary remains enabled because hosted inference can still be
 unavailable, reject a model route, or return output that fails schema validation. If needed,
-`Qwen/Qwen3-14B` can still be used as an explicit previous-base-model override.
+`nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` can still be used as an explicit base-model override.
 
 ## Assessment
 
