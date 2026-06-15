@@ -51,7 +51,7 @@ retrieval, and a small summary model.
 Pozify is not a medical device. It does not diagnose injuries, claim injury prevention, or replace a
 qualified trainer, clinician, or physical therapist.
 
-![Pozify product demo](docs/assets/demo.png)
+![Pozify product](https://tihado.com/images/pozify.webp)
 
 ## Hackathon Snapshot
 
@@ -312,15 +312,15 @@ uv run python app.py
 
 ### Useful environment variables
 
-| Variable                               | Purpose                                                  |
-| -------------------------------------- | -------------------------------------------------------- |
-| `POZIFY_ROUTER_DEVICE`                 | Override router device, for example `cpu` or `cuda`.     |
-| `POZIFY_SPACES_GPU_DURATION`           | `spaces.GPU` duration in seconds, default `120`.         |
-| `POZIFY_COACH_SUMMARY_PROVIDER`        | `hf_inference`, `local_transformers`, or `llama_cpp`.    |
-| `POZIFY_COACH_SUMMARY_MODEL`           | Coach model id or llama.cpp model alias.                 |
-| `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR` | Prefer a local merged/model directory for coach summary. |
+| Variable                                    | Purpose                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------- |
+| `POZIFY_ROUTER_DEVICE`                      | Override router device, for example `cpu` or `cuda`.              |
+| `POZIFY_SPACES_GPU_DURATION`                | `spaces.GPU` duration in seconds, default `120`.                  |
+| `POZIFY_COACH_SUMMARY_PROVIDER`             | `hf_inference`, `local_transformers`, or `llama_cpp`.             |
+| `POZIFY_COACH_SUMMARY_MODEL`                | Coach model id or llama.cpp model alias.                          |
+| `POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR`      | Prefer a local merged/model directory for coach summary.          |
 | `POZIFY_ALLOW_LOCAL_TRANSFORMERS_ON_SPACES` | Allow local Transformers generation on HF Spaces. Default is off. |
-| `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER` | Keep model output even when verifier fails.              |
+| `POZIFY_COACH_SUMMARY_BYPASS_VERIFIER`      | Keep model output even when verifier fails.                       |
 
 ## Exercise Router Training
 
