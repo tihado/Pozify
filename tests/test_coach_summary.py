@@ -423,6 +423,18 @@ class CoachSummaryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Output preview: I cannot return JSON"):
             coach_summary._extract_json_object("I cannot return JSON for that request.")
 
+        with self.assertRaisesRegex(ValueError, "Got list"):
+            coach_summary._extract_json_object("[]")
+
+    def test_extract_json_object_accepts_common_wrappers(self) -> None:
+        payload = {"summary": "ok"}
+
+        self.assertEqual(coach_summary._extract_json_object(json.dumps([payload])), payload)
+        self.assertEqual(
+            coach_summary._extract_json_object(json.dumps({"coach_summary": payload})),
+            payload,
+        )
+
     def test_verifier_rejects_issue_not_in_json(self) -> None:
         summary = CoachSummary(
             summary="The strongest issue was `incomplete_depth`.",

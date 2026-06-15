@@ -59,8 +59,20 @@ def _extract_json_object(text: str) -> dict[str, Any]:
                 f"parsed. Parser error: {nested_exc}. Output preview: {_text_preview(text)}"
             ) from nested_exc
 
+    if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+        payload = payload[0]
+    if isinstance(payload, dict):
+        for key in ("coach_summary", "summary_json", "output"):
+            nested_payload = payload.get(key)
+            if isinstance(nested_payload, dict):
+                payload = nested_payload
+                break
+
     if not isinstance(payload, dict):
-        raise ValueError("Coach summary model output must be a JSON object")
+        raise ValueError(
+            "Coach summary model output must be a JSON object. "
+            f"Got {type(payload).__name__}. Output preview: {_text_preview(text)}"
+        )
     return payload
 
 

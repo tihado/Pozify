@@ -15,6 +15,44 @@ from pozify.contracts import (
 from pozify.knowledge_cards import KnowledgeCard, prioritized_coaching_points
 
 
+def _compact_rep_metric(item: Any) -> dict[str, Any]:
+    payload = to_dict(item)
+    return {
+        key: payload[key]
+        for key in (
+            "rep_id",
+            "duration_sec",
+            "range_of_motion_score",
+            "stability_score",
+            "symmetry_score",
+            "variation_hints",
+        )
+        if key in payload
+    }
+
+
+def _compact_issue(issue: Any) -> dict[str, Any]:
+    payload = to_dict(issue)
+    compact = {
+        key: payload[key]
+        for key in ("rep_id", "issue", "severity", "start_sec", "end_sec")
+        if key in payload
+    }
+    evidence = payload.get("evidence")
+    if isinstance(evidence, dict):
+        compact["evidence_keys"] = sorted(str(key) for key in evidence.keys())[:8]
+    return compact
+
+
+def _compact_card(card: KnowledgeCard) -> dict[str, Any]:
+    return {
+        "card_id": card.card_id,
+        "card_type": card.card_type,
+        "title": card.title,
+        "coaching_points": list(card.coaching_points[:2]),
+    }
+
+
 def build_summary_evidence(
     *,
     profile: UserProfile,
@@ -41,6 +79,8 @@ def build_summary_evidence(
                 }
             )
 
+    sorted_issues = sorted(issues.issues, key=lambda item: item.severity, reverse=True)
+    rep_metrics = [_compact_rep_metric(item) for item in analysis.items[:6]]
     return {
         "user_profile": to_dict(profile),
         "exercise_classification": {
@@ -52,15 +92,15 @@ def build_summary_evidence(
         "rep_summary": {
             "rep_count": len(reps.reps),
             "aggregate_metrics": analysis.aggregate_metrics,
-            "rep_metrics": [to_dict(item) for item in analysis.items],
+            "rep_metrics": rep_metrics,
         },
         "issue_summary": {
             "issue_counts": issue_counts,
-            "issues": [to_dict(issue) for issue in issues.issues],
+            "issues": [_compact_issue(issue) for issue in sorted_issues[:5]],
             "top_issue_intervals": top_issue_intervals,
         },
         "priority_cues": prioritized_coaching_points(cards),
-        "knowledge_cards": [to_dict(card) for card in cards],
+        "knowledge_cards": [_compact_card(card) for card in cards[:5]],
     }
 
 
@@ -103,6 +143,7 @@ def build_coach_summary_prompt(
         "rules": [
             "Return exactly one JSON object that matches response_format.schema.",
             "The first output character must be `{`.",
+            "Do not return an array, string, null, schema description, or example payload.",
             "Use only the evidence JSON and retrieved knowledge cards.",
             "Do not infer new issues that are absent from issue_summary.issues.",
             "Do not diagnose injuries, pain, mobility deficits, or pathology.",
