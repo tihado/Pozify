@@ -264,10 +264,9 @@ POZIFY_SPACES_GPU_DURATION=300
 ```
 
 `HF_TOKEN` is only needed for `hf_inference` or for downloading a private/gated local model repo.
-Nemotron uses Mamba layers; the Space installs `causal-conv1d` and `mamba-ssm` so Transformers can
-use the fast kernels. `pre-requirements.txt` installs `torch` before those packages so their setup
-steps can import it. If the fast kernels are still unavailable at runtime, Pozify caps the local
-prompt context before generation to avoid the slow naive Mamba path crashing CUDA.
+Pozify uses the Nemotron implementation bundled with Transformers instead of downloading remote
+model code. If fast Mamba kernels are unavailable at runtime, Pozify caps the local prompt context
+before generation to avoid the slow naive Mamba path crashing CUDA.
 
 ### 2. Use the fine-tuned merged model locally
 

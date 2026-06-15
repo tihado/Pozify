@@ -18,6 +18,10 @@ Read in this order if you want to understand and run the current project:
 
 - [11-overview-demo-video-transcript.md](11-overview-demo-video-transcript.md)
 
+## Team Process
+
+- [50-codex-development-workflow.md](50-codex-development-workflow.md)
+
 ## Notes
 
 - Current coach-summary runtime default: `build-small-hackathon/pozify-coach-summary1`

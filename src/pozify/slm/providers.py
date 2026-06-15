@@ -207,13 +207,12 @@ def _load_local_transformers_backend(model: str, token: str | None) -> tuple[Any
             "transformers and torch are required for local coach summary inference"
         ) from exc
 
-    tokenizer = AutoTokenizer.from_pretrained(model, token=token, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(model, token=token)
     language_model = AutoModelForCausalLM.from_pretrained(
         model,
         device_map="auto",
         dtype="auto",
         token=token,
-        trust_remote_code=True,
     )
     language_model.eval()
 
