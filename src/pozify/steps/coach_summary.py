@@ -19,6 +19,17 @@ from pozify.slm.prompting import build_coach_summary_prompt
 from pozify.slm.providers import CoachSummaryModel, get_coach_summary_model
 from pozify.steps.coach_summary_fallback import build_fallback_summary
 
+_SUMMARY_KEYS = {
+    "summary",
+    "what_you_did",
+    "what_looked_good",
+    "what_changed_across_reps",
+    "valid_variation_vs_issue",
+    "top_fixes",
+    "next_session_plan",
+    "confidence_notes",
+}
+
 
 @dataclass(frozen=True)
 class CoachSummaryResult:
@@ -35,6 +46,44 @@ def _text_preview(text: str, *, limit: int = 240) -> str:
     return preview or "<empty>"
 
 
+def _unwrap_json_payload(payload: Any) -> Any:
+    if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+        payload = payload[0]
+    if isinstance(payload, dict):
+        for key in ("coach_summary", "summary_json", "output"):
+            nested_payload = payload.get(key)
+            if isinstance(nested_payload, dict):
+                return nested_payload
+    return payload
+
+
+def _summary_key_count(payload: Any) -> int:
+    if not isinstance(payload, dict):
+        return 0
+    return len(_SUMMARY_KEYS.intersection(payload))
+
+
+def _best_json_object_candidate(text: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    best_payload: dict[str, Any] | None = None
+    best_score = 0
+    for index, character in enumerate(text):
+        if character != "{":
+            continue
+        try:
+            payload, _end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        payload = _unwrap_json_payload(payload)
+        score = _summary_key_count(payload)
+        if isinstance(payload, dict) and score > best_score:
+            best_payload = payload
+            best_score = score
+            if score == len(_SUMMARY_KEYS):
+                break
+    return best_payload
+
+
 def _extract_json_object(text: str) -> dict[str, Any]:
     text = text.strip()
     if text.startswith("```"):
@@ -44,39 +93,35 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as exc:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start == -1 or end == -1 or end <= start:
+        payload = _best_json_object_candidate(text)
+        if payload is None:
             raise ValueError(
                 "Coach summary model output was not valid JSON. "
                 f"Parser error: {exc}. Output preview: {_text_preview(text)}"
             ) from exc
-        try:
-            payload = json.loads(text[start : end + 1])
-        except json.JSONDecodeError as nested_exc:
-            raise ValueError(
-                "Coach summary model output contained a JSON-like object that could not be "
-                f"parsed. Parser error: {nested_exc}. Output preview: {_text_preview(text)}"
-            ) from nested_exc
-
-    if isinstance(payload, list) and payload and isinstance(payload[0], dict):
-        payload = payload[0]
-    if isinstance(payload, dict):
-        for key in ("coach_summary", "summary_json", "output"):
-            nested_payload = payload.get(key)
-            if isinstance(nested_payload, dict):
-                payload = nested_payload
-                break
+    else:
+        payload = _unwrap_json_payload(payload)
 
     if not isinstance(payload, dict):
         raise ValueError(
             "Coach summary model output must be a JSON object. "
             f"Got {type(payload).__name__}. Output preview: {_text_preview(text)}"
         )
+    if _summary_key_count(payload) == 0:
+        raise ValueError(
+            "Coach summary model output did not contain a coach summary JSON object. "
+            f"Output preview: {_text_preview(text)}"
+        )
     return payload
 
 
 def _summary_from_payload(payload: dict[str, Any]) -> CoachSummary:
+    missing_fields = sorted(_SUMMARY_KEYS.difference(payload))
+    if missing_fields:
+        raise ValueError(
+            "Coach summary model output is missing required field(s): "
+            f"{', '.join(missing_fields)}"
+        )
     summary = CoachSummary(
         summary=str(payload["summary"]),
         what_you_did=[str(item) for item in payload["what_you_did"]],

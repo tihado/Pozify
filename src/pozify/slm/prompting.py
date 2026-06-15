@@ -53,6 +53,20 @@ def _compact_card(card: KnowledgeCard) -> dict[str, Any]:
     }
 
 
+def _selected_aggregate_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: metrics[key]
+        for key in (
+            "avg_rom_score",
+            "avg_stability_score",
+            "avg_symmetry_score",
+            "fatigue_trend_rom_delta",
+            "pose_valid_ratio",
+        )
+        if key in metrics
+    }
+
+
 def build_summary_evidence(
     *,
     profile: UserProfile,
@@ -80,27 +94,36 @@ def build_summary_evidence(
             )
 
     sorted_issues = sorted(issues.issues, key=lambda item: item.severity, reverse=True)
-    rep_metrics = [_compact_rep_metric(item) for item in analysis.items[:6]]
+    rep_metrics = [_compact_rep_metric(item) for item in analysis.items[:4]]
     return {
-        "user_profile": to_dict(profile),
+        "user_profile": {
+            "goal": profile.goal,
+            "experience_level": profile.experience_level,
+            "intended_exercise": profile.intended_exercise,
+            "equipment": profile.equipment,
+        },
         "exercise_classification": {
             "exercise": classification.exercise,
             "confidence": classification.confidence,
             "fallback_required": classification.fallback_required,
         },
-        "variation": to_dict(variation),
+        "variation": {
+            "detected_variation": variation.detected_variation,
+            "variation_confidence": variation.variation_confidence,
+            "not_issues": variation.not_issues,
+        },
         "rep_summary": {
             "rep_count": len(reps.reps),
-            "aggregate_metrics": analysis.aggregate_metrics,
+            "aggregate_metrics": _selected_aggregate_metrics(analysis.aggregate_metrics),
             "rep_metrics": rep_metrics,
         },
         "issue_summary": {
             "issue_counts": issue_counts,
-            "issues": [_compact_issue(issue) for issue in sorted_issues[:5]],
-            "top_issue_intervals": top_issue_intervals,
+            "issues": [_compact_issue(issue) for issue in sorted_issues[:3]],
+            "top_issue_intervals": top_issue_intervals[:2],
         },
-        "priority_cues": prioritized_coaching_points(cards),
-        "knowledge_cards": [_compact_card(card) for card in cards[:5]],
+        "priority_cues": prioritized_coaching_points(cards, limit=4),
+        "knowledge_cards": [_compact_card(card) for card in cards[:3]],
     }
 
 
@@ -161,5 +184,6 @@ def build_coach_summary_prompt(
         [
             json.dumps(instructions, **json_dump_kwargs),
             json.dumps(evidence, **json_dump_kwargs),
+            'Output the final coach summary JSON object now. Start with {"summary":',
         ]
     )

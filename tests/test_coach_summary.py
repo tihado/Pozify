@@ -435,6 +435,24 @@ class CoachSummaryTests(unittest.TestCase):
             payload,
         )
 
+    def test_extract_json_object_ignores_evidence_echo_before_summary(self) -> None:
+        payload = {
+            "summary": "ok",
+            "what_you_did": [],
+            "what_looked_good": [],
+            "what_changed_across_reps": [],
+            "valid_variation_vs_issue": [],
+            "top_fixes": [],
+            "next_session_plan": [],
+            "confidence_notes": [],
+        }
+        output = (
+            '{"rep_id":5,"issue":"shallow_depth","severity":1.0}'
+            f"\n{json.dumps(payload)}"
+        )
+
+        self.assertEqual(coach_summary._extract_json_object(output), payload)
+
     def test_verifier_rejects_issue_not_in_json(self) -> None:
         summary = CoachSummary(
             summary="The strongest issue was `incomplete_depth`.",
