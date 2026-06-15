@@ -45,6 +45,7 @@ HF_DATA_FILENAMES = (
     "coach_summary_eval.jsonl",
     "public_fitness_style.jsonl",
 )
+TRAINING_GPU = "A100-80GB"
 
 image = (
     modal.Image.debian_slim(python_version="3.10")
@@ -165,9 +166,9 @@ def _filtered_kwargs(callable_obj: Any, kwargs: dict[str, Any]) -> dict[str, Any
     return {key: value for key, value in kwargs.items() if key in parameters}
 
 
-def _load_config() -> dict[str, Any]:
+def _load_config(*, include_saved_training_config: bool = True) -> dict[str, Any]:
     config = _read_json(DEFAULT_CONFIG_PATH)
-    if TRAINING_CONFIG_PATH.exists():
+    if include_saved_training_config and TRAINING_CONFIG_PATH.exists():
         config.update(_read_json(TRAINING_CONFIG_PATH))
     return config
 
@@ -419,7 +420,7 @@ def prepare_data() -> dict[str, Any]:
 
 
 @app.function(
-    gpu="A10G",
+    gpu=TRAINING_GPU,
     volumes={str(DATA_ROOT): data_volume, str(MODEL_ROOT): model_volume},
     secrets=[_hf_secret()],
     timeout=3 * 60 * 60,
@@ -429,17 +430,20 @@ def train(
     style_weight: float = 0.2,
     output_subdir: str = "adapter",
 ) -> dict[str, Any]:
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     import torch
     from datasets import Dataset
-    from peft import LoraConfig
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from transformers import (
         AutoModelForCausalLM,
         AutoTokenizer,
         BitsAndBytesConfig,
+        DataCollatorForLanguageModeling,
+        Trainer,
+        TrainingArguments,
     )
-    from trl import SFTConfig, SFTTrainer
 
-    config = _load_config()
+    config = _load_config(include_saved_training_config=False)
     if epochs is not None:
         config["num_train_epochs"] = epochs
     config["style_weight"] = style_weight
@@ -463,13 +467,51 @@ def train(
         style_weight=style_weight,
     )
     eval_dataset_rows = _build_eval_dataset_rows(eval_rows)
-    train_dataset = Dataset.from_list(training_rows)
-    eval_dataset = Dataset.from_list(eval_dataset_rows)
 
     tokenizer = AutoTokenizer.from_pretrained(str(config["base_model"]))
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
+    max_seq_length = int(config.get("max_seq_length", 2048))
+
+    def tokenize_rows(rows: list[dict[str, str]]) -> tuple[list[dict[str, list[int]]], dict[str, Any]]:
+        tokenized_rows: list[dict[str, list[int]]] = []
+        lengths: list[int] = []
+        truncated_count = 0
+        head_tokens = min(256, max_seq_length // 4)
+        tail_tokens = max_seq_length - head_tokens
+        for row in rows:
+            input_ids = tokenizer(
+                str(row["text"]),
+                add_special_tokens=False,
+                truncation=False,
+            )["input_ids"]
+            if tokenizer.eos_token_id is not None:
+                input_ids = [*input_ids, int(tokenizer.eos_token_id)]
+            lengths.append(len(input_ids))
+            if len(input_ids) > max_seq_length:
+                truncated_count += 1
+                input_ids = [*input_ids[:head_tokens], *input_ids[-tail_tokens:]]
+            tokenized_rows.append(
+                {
+                    "input_ids": input_ids,
+                    "attention_mask": [1] * len(input_ids),
+                }
+            )
+        stats = {
+            "max_seq_length": max_seq_length,
+            "truncated_row_count": truncated_count,
+            "max_input_tokens_before_truncation": max(lengths) if lengths else 0,
+            "avg_input_tokens_before_truncation": round(sum(lengths) / len(lengths), 2)
+            if lengths
+            else 0,
+        }
+        return tokenized_rows, stats
+
+    tokenized_training_rows, train_token_stats = tokenize_rows(training_rows)
+    tokenized_eval_rows, eval_token_stats = tokenize_rows(eval_dataset_rows)
+    train_dataset = Dataset.from_list(tokenized_training_rows)
+    eval_dataset = Dataset.from_list(tokenized_eval_rows)
 
     quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -477,11 +519,24 @@ def train(
         bnb_4bit_quant_type="nf4",
         bnb_4bit_compute_dtype=torch.bfloat16,
     )
-    model = AutoModelForCausalLM.from_pretrained(
-        str(config["base_model"]),
-        quantization_config=quantization_config,
-        device_map="auto",
-    )
+    model_kwargs: dict[str, Any] = {
+        "quantization_config": quantization_config,
+        "dtype": torch.bfloat16,
+        "device_map": "auto",
+        "attn_implementation": "sdpa",
+    }
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            str(config["base_model"]),
+            **model_kwargs,
+        )
+    except (TypeError, ValueError):
+        model_kwargs.pop("attn_implementation", None)
+        model = AutoModelForCausalLM.from_pretrained(
+            str(config["base_model"]),
+            **model_kwargs,
+        )
+    model.config.use_cache = False
 
     peft_config = LoraConfig(
         r=int(config.get("lora_r", 16)),
@@ -500,44 +555,49 @@ def train(
         ],
     )
 
+    prepare_kwargs: dict[str, Any] = {}
+    if _supports_kwarg(prepare_model_for_kbit_training, "use_gradient_checkpointing"):
+        prepare_kwargs["use_gradient_checkpointing"] = True
+    model = prepare_model_for_kbit_training(model, **prepare_kwargs)
+    model = get_peft_model(model, peft_config)
+
     adapter_dir = MODEL_ROOT / output_subdir
-    sft_config_kwargs = {
+    if adapter_dir.exists():
+        shutil.rmtree(adapter_dir)
+    adapter_dir.mkdir(parents=True, exist_ok=True)
+    training_args_kwargs = {
         "output_dir": str(adapter_dir),
         "learning_rate": float(config["learning_rate"]),
         "num_train_epochs": float(config["num_train_epochs"]),
         "per_device_train_batch_size": int(config["per_device_train_batch_size"]),
+        "per_device_eval_batch_size": 1,
         "gradient_accumulation_steps": int(config["gradient_accumulation_steps"]),
         "save_strategy": "epoch",
         "logging_steps": 10,
         "bf16": True,
+        "gradient_checkpointing": True,
+        "remove_unused_columns": False,
+        "prediction_loss_only": True,
+        "optim": "paged_adamw_8bit",
         "report_to": [],
     }
-    if _supports_kwarg(SFTConfig.__init__, "eval_strategy"):
-        sft_config_kwargs["eval_strategy"] = "epoch"
-    elif _supports_kwarg(SFTConfig.__init__, "evaluation_strategy"):
-        sft_config_kwargs["evaluation_strategy"] = "epoch"
-    if _supports_kwarg(SFTConfig.__init__, "max_seq_length"):
-        sft_config_kwargs["max_seq_length"] = int(config["max_seq_length"])
+    if _supports_kwarg(TrainingArguments.__init__, "eval_strategy"):
+        training_args_kwargs["eval_strategy"] = "epoch"
+    elif _supports_kwarg(TrainingArguments.__init__, "evaluation_strategy"):
+        training_args_kwargs["evaluation_strategy"] = "epoch"
+    if _supports_kwarg(TrainingArguments.__init__, "gradient_checkpointing_kwargs"):
+        training_args_kwargs["gradient_checkpointing_kwargs"] = {"use_reentrant": False}
 
-    trainer_kwargs: dict[str, Any] = {
-        "model": model,
-        "train_dataset": train_dataset,
-        "eval_dataset": eval_dataset,
-        "peft_config": peft_config,
-        "args": SFTConfig(**_filtered_kwargs(SFTConfig.__init__, sft_config_kwargs)),
-    }
-    if _supports_kwarg(SFTTrainer.__init__, "processing_class"):
-        trainer_kwargs["processing_class"] = tokenizer
-    elif _supports_kwarg(SFTTrainer.__init__, "tokenizer"):
-        trainer_kwargs["tokenizer"] = tokenizer
-    if _supports_kwarg(SFTTrainer.__init__, "dataset_text_field"):
-        trainer_kwargs["dataset_text_field"] = "text"
-    elif _supports_kwarg(SFTTrainer.__init__, "formatting_func"):
-        trainer_kwargs["formatting_func"] = lambda example: example["text"]
-    if _supports_kwarg(SFTTrainer.__init__, "max_seq_length"):
-        trainer_kwargs["max_seq_length"] = int(config["max_seq_length"])
-
-    trainer = SFTTrainer(**_filtered_kwargs(SFTTrainer.__init__, trainer_kwargs))
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    trainer = Trainer(
+        model=model,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        args=TrainingArguments(
+            **_filtered_kwargs(TrainingArguments.__init__, training_args_kwargs)
+        ),
+        data_collator=data_collator,
+    )
     train_result = trainer.train()
     trainer.save_model(str(adapter_dir))
     tokenizer.save_pretrained(str(adapter_dir))
@@ -555,6 +615,8 @@ def train(
         "global_step": int(getattr(train_result, "global_step", 0)),
         "training_loss": float(getattr(train_result, "training_loss", 0.0)),
         "output_dir": str(adapter_dir),
+        "train_token_stats": train_token_stats,
+        "eval_token_stats": eval_token_stats,
     }
     _write_json(TRAINING_CONFIG_PATH, config)
     _write_json(TRAINING_SUMMARY_PATH, summary)
@@ -563,7 +625,7 @@ def train(
 
 
 @app.function(
-    gpu="A10G",
+    gpu=TRAINING_GPU,
     volumes={str(DATA_ROOT): data_volume, str(MODEL_ROOT): model_volume},
     secrets=[_hf_secret()],
     timeout=90 * 60,
@@ -603,6 +665,7 @@ def evaluate(
     base_model = AutoModelForCausalLM.from_pretrained(
         str(config["base_model"]),
         quantization_config=quantization_config,
+        dtype=torch.bfloat16,
         device_map="auto",
     )
     model = PeftModel.from_pretrained(base_model, str(adapter_dir))
@@ -710,7 +773,7 @@ def _upload_hf_file(
 
 
 @app.function(
-    gpu="A10G",
+    gpu=TRAINING_GPU,
     volumes={str(MODEL_ROOT): model_volume},
     secrets=[_hf_secret()],
     timeout=90 * 60,
@@ -739,7 +802,7 @@ def merge(
     tokenizer = AutoTokenizer.from_pretrained(str(adapter_dir))
     base_model = AutoModelForCausalLM.from_pretrained(
         str(config["base_model"]),
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map="auto",
         low_cpu_mem_usage=True,
     )

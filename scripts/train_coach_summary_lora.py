@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 DEFAULT_CONFIG = {
-    "base_model": "Qwen/Qwen3-14B",
+    "base_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
     "train_file": str(ROOT / "data/sft/coach_summary_train.jsonl"),
     "eval_file": str(ROOT / "data/sft/coach_summary_eval.jsonl"),
     "output_dir": str(ROOT / "models/coach_summary_lora"),
@@ -22,7 +22,7 @@ DEFAULT_CONFIG = {
     "num_train_epochs": 2,
     "per_device_train_batch_size": 1,
     "gradient_accumulation_steps": 8,
-    "max_seq_length": 4096,
+    "max_seq_length": 2048,
 }
 
 

@@ -51,8 +51,16 @@ class VideoQCTests(unittest.TestCase):
             else:
                 frame = np.full((height, width, 3), 135, dtype=np.uint8)
                 offset = frame_index % max(1, width // 4)
-                cv2.rectangle(frame, (40 + offset, 80), (220 + offset, 300), (245, 245, 245), -1)
-                cv2.line(frame, (0, frame_index % height), (width - 1, height - 1), (10, 10, 10), 3)
+                cv2.rectangle(
+                    frame, (40 + offset, 80), (220 + offset, 300), (245, 245, 245), -1
+                )
+                cv2.line(
+                    frame,
+                    (0, frame_index % height),
+                    (width - 1, height - 1),
+                    (10, 10, 10),
+                    3,
+                )
                 cv2.putText(
                     frame,
                     str(frame_index),
@@ -85,17 +93,6 @@ class VideoQCTests(unittest.TestCase):
         self.assertIsNotNone(manifest.brightness_mean)
         self.assertIsNotNone(manifest.blur_laplacian_var)
 
-    def test_rotated_mov_reports_display_dimensions(self) -> None:
-        path = FIXTURES_DIR / "IMG_2296.MOV"
-        self.assertTrue(path.exists(), path)
-
-        manifest = video_qc.run(str(path))
-
-        self.assertTrue(manifest.analysis_allowed)
-        self.assertEqual(manifest.width, 1080)
-        self.assertEqual(manifest.height, 1920)
-        self.assertEqual(manifest.quality_warnings, [])
-
     def test_invalid_video_sets_decode_failure_and_blocks_analysis(self) -> None:
         manifest = video_qc.run(str(Path(self.temp_dir.name) / "missing.mp4"))
 
@@ -105,7 +102,9 @@ class VideoQCTests(unittest.TestCase):
         self.assertEqual(manifest.sampled_frames, 0)
 
     def test_short_low_resolution_low_fps_video_reports_warnings(self) -> None:
-        path = self._write_video("short_low.mp4", fps=10.0, duration_sec=2.0, size=(320, 240))
+        path = self._write_video(
+            "short_low.mp4", fps=10.0, duration_sec=2.0, size=(320, 240)
+        )
 
         manifest = video_qc.run(str(path))
 

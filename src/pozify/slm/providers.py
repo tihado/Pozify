@@ -210,7 +210,7 @@ def _load_local_transformers_backend(model: str, token: str | None) -> tuple[Any
     language_model = AutoModelForCausalLM.from_pretrained(
         model,
         device_map="auto",
-        torch_dtype="auto",
+        dtype="auto",
         token=token,
     )
     language_model.eval()

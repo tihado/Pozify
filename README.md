@@ -267,7 +267,7 @@ Download the merged repo locally, then point Pozify at it:
 
 ```bash
 export POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR=/absolute/path/to/merged_model
-export POZIFY_COACH_SUMMARY_BASE_MODEL=Qwen/Qwen3-14B
+export POZIFY_COACH_SUMMARY_BASE_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
 export POZIFY_COACH_SUMMARY_ADAPTER_ID=build-small-hackathon/pozify-coach-summary1
 uv run python app.py
 ```
@@ -362,6 +362,10 @@ uv run modal run scripts/coach_summary_modal.py \
   --style-weight 0.2 \
   --repo-id build-small-hackathon/pozify-coach-summary1
 ```
+
+The checked-in fine-tune config uses `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` as the base model.
+The Modal training, evaluation, and merge stages request an `A100-80GB` GPU because the Nemotron
+base model can run out of CUDA memory on the previous `A10G` setting.
 
 Step-by-step:
 

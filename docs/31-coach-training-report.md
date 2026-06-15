@@ -1,6 +1,6 @@
 # Coach Summary Training Report
 
-Generated from the current Pozify codebase state on June 14, 2026.
+Generated from the current Pozify codebase state on June 15, 2026.
 
 ## Summary
 
@@ -11,7 +11,7 @@ in the app.
 
 The current training stack is:
 
-- Base model: `Qwen/Qwen3-14B`
+- Base model: `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16`
 - Fine-tuning method: LoRA / QLoRA-style SFT on Modal
 - Training target: Pozify-native structured summary generation
 - Runtime fallback: deterministic conservative summary when model generation fails or verification fails
@@ -121,19 +121,19 @@ structured.
 
 The codebase now defaults to:
 
-- `Qwen/Qwen3-14B`
+- `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16`
 
 This is used in:
 
 - `configs/coach_summary_lora.default.json`
 - `scripts/train_coach_summary_lora.py`
-- runtime default in `src/pozify/slm/providers.py`
+- Modal training, evaluation, and merge stages in `scripts/coach_summary_modal.py`
 
 ### Default training hyperparameters
 
 | Hyperparameter | Value |
 | --- | ---: |
-| Base model | `Qwen/Qwen3-14B` |
+| Base model | `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` |
 | LoRA rank | 16 |
 | LoRA alpha | 32 |
 | LoRA dropout | 0.05 |
@@ -141,7 +141,7 @@ This is used in:
 | Epochs | 2 |
 | Batch size per device | 1 |
 | Gradient accumulation | 8 |
-| Max sequence length | 4096 |
+| Max sequence length | 2048 |
 | Default style weight | 0.2 |
 
 ### Modal implementation
@@ -159,7 +159,9 @@ The full training pipeline is implemented in `scripts/coach_summary_modal.py` wi
 The training stage:
 
 - loads the base model with 4-bit quantization
-- fine-tunes with TRL `SFTTrainer`
+- tokenizes and truncates rows explicitly before training so long JSON evidence rows cannot bypass
+  the sequence-length cap
+- fine-tunes the LoRA adapter with the Transformers `Trainer`
 - saves adapter weights and tokenizer to the Modal model volume
 
 The merge stage:
@@ -283,7 +285,7 @@ The app runtime defaults to the fine-tuned coach-summary model:
 
 The deterministic fallback summary remains enabled because hosted inference can still be
 unavailable, reject a model route, or return output that fails schema validation. If needed,
-`Qwen/Qwen3-14B` can still be used as an explicit base-model override.
+`Qwen/Qwen3-14B` can still be used as an explicit previous-base-model override.
 
 ## Assessment
 

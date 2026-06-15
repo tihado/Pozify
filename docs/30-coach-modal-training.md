@@ -68,7 +68,11 @@ The pipeline expects these files:
 
 The default checked-in config currently points to:
 
-- base model: `Qwen/Qwen3-14B`
+- base model: `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16`
+
+The GPU-backed Modal stages currently request `A100-80GB` for training, evaluation, and merging.
+This is intentional for the Nemotron base model; the previous `A10G` setting can run out of CUDA
+memory during fine-tuning or merge.
 
 ## Recommended Training Flow
 
@@ -156,7 +160,7 @@ Download the merged repo or copy the merged directory locally, then:
 
 ```bash
 export POZIFY_COACH_SUMMARY_LOCAL_MODEL_DIR=/path/to/merged_model
-export POZIFY_COACH_SUMMARY_BASE_MODEL=Qwen/Qwen3-14B
+export POZIFY_COACH_SUMMARY_BASE_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
 export POZIFY_COACH_SUMMARY_ADAPTER_ID=build-small-hackathon/pozify-coach-summary1
 uv run python app.py
 ```
